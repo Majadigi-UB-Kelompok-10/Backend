@@ -75,3 +75,32 @@ func (c *SimpleCache) Delete(key string) {
     defer c.mu.Unlock()
     delete(c.store, key)
 }
+
+func (c *SimpleCache) SetImmutable(key string, val interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.store[key] = CacheEntry{
+		Data:      val,
+		ExpiresAt: time.Unix(1<<63-1, 0),
+	}
+}
+
+func (c *SimpleCache) GetImmutable(key string) (interface{}, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, ok := c.store[key]
+	if !ok {
+		return nil, false
+	}
+	return entry.Data, true
+}
+
+func (c *SimpleCache) InvalidatePattern(pattern string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key := range c.store {
+		if strings.Contains(key, pattern) {
+			delete(c.store, key)
+		}
+	}
+}
