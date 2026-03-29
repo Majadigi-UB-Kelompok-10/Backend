@@ -119,14 +119,6 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 	pageStr := c.Query("page", "1")
 	limitStr := c.Query("limit", "10")
 
-	h.Logger.Debug("GetAllBahanPokok request received", WithContext(
-		"tanggal", tanggalStr,
-		"bahan_pokok", bahanPokokRaw,
-		"area", areaInputRaw,
-		"page", pageStr,
-		"limit", limitStr,
-	))
-
 	bahanPokok, errBahan := utils.ValidateQueryString(bahanPokokRaw, 100, "bahan_pokok")
 	if errBahan != nil {
 		return c.Status(400).JSON(BaseResponse{Error: "Input bahan_pokok tidak valid"})
@@ -152,9 +144,10 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 	cacheKey := fmt.Sprintf("all_bahan:%s:page_%d:limit_%d:bahan_pokok_%s:area_%s",
 		tanggalStr, page, limit, bahanPokok, areaSlugPilihan)
 
-	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
 		return c.JSON(cachedData)
 	}
+
 
 	tanggalPg := pgtype.Date{Time: parsedTime, Valid: true}
 	offset := (page - 1) * limit
@@ -234,14 +227,7 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 		response.Data = []ItemBahanPokok{}
 	}
 
-	cache.GlobalCache.Set(cacheKey, response, CacheShortTTL)
-
-	h.Logger.Info("GetAllBahanPokok success", WithContext(
-		"total_data", totalCount,
-		"page", page,
-		"limit", limit,
-		"returned_items", len(response.Data),
-	))
+	cache.GlobalCache.SetImmutable(cacheKey, response)
 
 	return c.JSON(response)
 }
@@ -250,8 +236,6 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 // CACHE WARMUP
 // =====================================================================
 func (h *BahanPokokHandler) CacheWarmup() {
-	h.Logger.Info("Cache warmup started", WithContext("date", time.Now().Format("2006-01-02")))
-
 	hariIni := time.Now().Format("2006-01-02")
 	parsedTime, _ := time.Parse("2006-01-02", hariIni)
 	tanggalPg := pgtype.Date{Time: parsedTime, Valid: true}
@@ -302,11 +286,6 @@ func (h *BahanPokokHandler) CacheWarmup() {
 
 	cacheKey := fmt.Sprintf("all_bahan:%s:page_1:limit_10:bahan_pokok_:area_", hariIni)
 	cache.GlobalCache.Set(cacheKey, response, CacheShortTTL)
-
-	h.Logger.Info("Cache warmup completed", WithContext(
-		"cached_items", len(hasilAkhir),
-		"total_data", totalCount,
-	))
 }
 
 // =====================================================================
@@ -343,9 +322,10 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 	}
 
 	cacheKey := fmt.Sprintf("detail_bahan:%s:%s:%s", slugParam, tanggalReqStr, areaSlugPilihan)
-	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
 		return c.JSON(cachedData)
 	}
+
 
 	tanggalReqPg := pgtype.Date{Time: parsedTime, Valid: true}
 
@@ -472,7 +452,7 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 		}
 	}
 
-	cache.GlobalCache.Set(cacheKey, response, CacheShortTTL)
+	cache.GlobalCache.SetImmutable(cacheKey, response)
 	if response.GrafikRiwayat == nil { 
 		response.GrafikRiwayat = []ItemGrafik{} 
 	}
@@ -483,18 +463,19 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 }
 
 // =====================================================================
-// 3. LIST AREA
+// 3. LIST AREA (IMMUTABLE CACHE - No DB query after first request)
 // =====================================================================
 func (h *BahanPokokHandler) GetAllAreas(c fiber.Ctx) error {
 	cacheKey := "all_areas_list"
-	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+	
+	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
 		return c.JSON(cachedData)
 	}
+
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	
 	areas, err := h.Queries.GetAllAreas(ctx) 
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{
@@ -520,7 +501,7 @@ func (h *BahanPokokHandler) GetAllAreas(c fiber.Ctx) error {
 		Data:  finalAreas,
 	}
 
-	cache.GlobalCache.Set(cacheKey, response, CacheAreaTTL)
+	cache.GlobalCache.SetImmutable(cacheKey, response)
 
 	return c.JSON(response)
 }
@@ -666,8 +647,8 @@ func (h *BahanPokokHandler) CreateHargaHarian(c fiber.Ctx) error {
 		return c.Status(500).JSON(BaseResponse{Error: "Gagal simpan harga: " + errDb.Error()})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
-	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
+	cache.GlobalCache.InvalidatePattern("all_bahan:")
+	cache.GlobalCache.InvalidatePattern("detail_bahan:")
 
 	return c.Status(201).JSON(BaseResponse{
 		Pesan: "Mantap! Harga " + namaKomoditas + " di " + namaArea + " berhasil dicatat.",
@@ -708,8 +689,8 @@ func (h *BahanPokokHandler) UpdateHargaHarian(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengupdate harga."})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
-	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
+	cache.GlobalCache.InvalidatePattern("all_bahan:")
+	cache.GlobalCache.InvalidatePattern("detail_bahan:")
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Harga berhasil direvisi.",
@@ -739,8 +720,8 @@ func (h *BahanPokokHandler) DeleteHargaHarian(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal menghapus harga harian."})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
-	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
+	cache.GlobalCache.InvalidatePattern("all_bahan:")
+	cache.GlobalCache.InvalidatePattern("detail_bahan:")
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Data harga berhasil dihapus.",
@@ -838,8 +819,8 @@ func (h *BahanPokokHandler) UpdateBahanPokok(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengupdate bahan pokok di database."})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
-	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
+	cache.GlobalCache.InvalidatePattern("all_bahan:")
+	cache.GlobalCache.InvalidatePattern("detail_bahan:")
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Komoditas berhasil diperbarui.",
