@@ -72,15 +72,15 @@ func main() {
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
-		log.Fatalf("❌ Gagal konek ke database: %s\n", maskSensitiveData(err.Error()))
+		log.Fatalf("Failed to connect to database: %s\n", maskSensitiveData(err.Error()))
 	}
-	fmt.Println("✓ Database PostgreSQL connected")
+	fmt.Println("Database PostgreSQL connected")
 
 	cld, errCld := cloudinary.New()
 	if errCld != nil {
-		log.Fatalf("❌ Gagal inisialisasi Cloudinary: %s\n", maskSensitiveData(errCld.Error()))
+		log.Fatalf("Failed to initialize Cloudinary: %s\n", maskSensitiveData(errCld.Error()))
 	}
-	fmt.Println("✓ Cloudinary initialized")
+	fmt.Println("Cloudinary initialized")
 
 	app := fiber.New(fiber.Config{
 		AppName:     "Siskaperbapo Service",
@@ -115,7 +115,7 @@ func main() {
 	bpHandler := handlers.NewBahanPokokHandler(queries, cld, hargaWorker) 
 	routes.SetupRoutes(app, bpHandler)
 
-	fmt.Println("✓ Routes configured")
+	fmt.Println("Routes configured")
 
 	// Run cache warmup asynchronously
 	go func() {
@@ -126,10 +126,10 @@ func main() {
 	// Start server in background
 	go func() {
 		if err := app.Listen(":8080"); err != nil && err.Error() != "shutting down" {
-			log.Printf("❌ Server error: %v\n", err)
+			log.Printf("Server error: %v\n", err)
 		}
 	}()
-	fmt.Println("✓ Server listening on :8080")
+	fmt.Println("Server listening on :8080")
 
 	// =====================================================================
 	// GRACEFUL SHUTDOWN - Wait for signals
@@ -138,28 +138,28 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	fmt.Println("\n⏱️ Shutdown signal received, starting graceful shutdown...")
+	fmt.Println("\nShutdown signal received, starting graceful shutdown...") 
 	
 	// Graceful shutdown with 30 second timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	// 1. Stop accepting new requests and wait for in-flight requests
-	fmt.Println("📍 Shutting down HTTP server...")
+	fmt.Println("Shutting down HTTP server...")
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		log.Printf("⚠️ HTTP server shutdown error: %v\n", err)
+		log.Printf("HTTP server shutdown error: %v\n", err)
 	}
-	fmt.Println("✓ HTTP server shutdown complete")
+	fmt.Println("HTTP server shutdown complete")
 
 	// 2. Stop worker pool
-	fmt.Println("📍 Stopping worker pool...")
+	fmt.Println("Stopping worker pool...")
 	hargaWorker.Shutdown()
-	fmt.Println("✓ Worker pool stopped")
+	fmt.Println("Worker pool stopped")
 
 	// 3. Close database connection pool
-	fmt.Println("📍 Closing database connections...")
+	fmt.Println("Closing database connections...")
 	pool.Close()
-	fmt.Println("✓ Database connections closed")
+	fmt.Println("Database connections closed")
 
-	fmt.Println("✓ Graceful shutdown complete - goodbye! 👋")
+	fmt.Println("Graceful shutdown complete")
 }
