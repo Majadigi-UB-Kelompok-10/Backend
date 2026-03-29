@@ -1,0 +1,7 @@
+# Sembunyikan file rahasia
+.env
+
+# Sembunyikan file build hasil kompilasi Go
+/bin
+/tmp
+*.exe
