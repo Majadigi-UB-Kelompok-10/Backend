@@ -5,3 +5,20 @@
 /bin
 /tmp
 *.exe
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
+
+# Hide .env.keys
+.env.keys
+
+# Show .env.encrypted
+!.env.encrypted
+!.env.docker.encrypted
+
+# Include the empty .postgre-data folder
+!/.postgre-data
+
+# Do not include build files
+service-siskaperbapo
