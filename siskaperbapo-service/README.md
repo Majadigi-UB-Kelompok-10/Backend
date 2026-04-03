@@ -45,11 +45,6 @@ go build ./cmd/api/main.go
 
 ### For Container Solution
 
-Create go build binary if necessary:
-```
-CGO_ENABLED=0 GOOS=linux go build -o service-siskaperbapo ./cmd/api/main.go
-```
-
 Prepare .env:
 ```
 dotenvx decrypt -f .env.docker.encrypted
