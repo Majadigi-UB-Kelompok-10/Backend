@@ -1,0 +1,97 @@
+services:
+  # ==========================================
+  # 🛒 1. SISKAPERBAPO SERVICES
+  # ==========================================
+  siskaperbapo-redis:
+    image: redis:8.6
+    container_name: siskaperbapo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - siskaperbapo-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+
+  siskaperbapo-db:
+    image: postgres:18-alpine
+    container_name: siskaperbapo-db
+    env_file:
+      - ./siskaperbapo-service/.env
+    ports:
+      - "5432:5432"
+    volumes:
+      - siskaperbapo-postgres-data:/var/lib/postgresql/data
+      - ./siskaperbapo-service/db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+
+  siskaperbapo-api:
+    build:
+      context: ./siskaperbapo-service
+      dockerfile: Dockerfile
+    container_name: siskaperbapo-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./siskaperbapo-service/.env
+    depends_on:
+      - siskaperbapo-db
+      - siskaperbapo-redis
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 🏖️ 2. SIDITA SERVICES
+  # ==========================================
+  sidita-redis:
+    image: redis:8.6
+    container_name: sidita-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - sidita-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+
+  sidita-db:
+    image: postgres:18-alpine
+    container_name: sidita-db
+    env_file:
+      - ./sidita-service/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - sidita-postgres-data:/var/lib/postgresql/data
+      - ./sidita-service/db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+
+  sidita-api:
+    build:
+      context: ./sidita-service
+      dockerfile: Dockerfile
+    container_name: sidita-api
+    ports:
+      - "3000:8080"
+    env_file:
+      - ./sidita-service/.env
+    depends_on:
+      - sidita-db
+      - sidita-redis
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+volumes:
+  siskaperbapo-postgres-data:
+  siskaperbapo-redis-data:
+  sidita-postgres-data:
+  sidita-redis-data:
+
+
+networks:
+  capstone-global-network:
+    driver: bridge

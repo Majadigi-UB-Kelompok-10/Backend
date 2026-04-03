@@ -149,8 +149,7 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 		tanggalStr, page, limit, bahanPokok, areaSlugPilihan)
 
 	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
-		return c.JSON(cachedData)
-	}
+
 
 
 	tanggalPg := pgtype.Date{Time: parsedTime, Valid: true}

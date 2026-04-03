@@ -104,6 +104,7 @@ func (r *RedisCache) InvalidatePattern(pattern string) {
 	for {
 		keys, nextCursor, err := r.client.Scan(ctx, cursor, "*"+pattern+"*", 100).Result()
 		if err != nil {
+			fmt.Printf("[REDIS ERROR] Gangguan saat InvalidatePattern: %v\n", err)
 			return
 		}
 
