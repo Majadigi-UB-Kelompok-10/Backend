@@ -1,7 +1,7 @@
 # How to Setup this backend
 
 Requirement:
-- Go Installed (Idk what version, but mine's Go v1.12.1)
+- Go Installed (v1.25.7 or Later)
 - Git
 
 ### For Local Development
@@ -13,7 +13,7 @@ git clone https://github.com/Majadigi-UB-Kelompok-10/Backend.git
 
 2. Run initial go setup
 ```
-go mod
+go mod download
 ```
 or
 ```
@@ -44,11 +44,6 @@ go build ./cmd/api/main.go
 ```
 
 ### For Container Solution
-
-Create .postgre-data folder if not exist:
-```
-mkdir .postgre-data
-```
 
 Create go build binary if necessary:
 ```
