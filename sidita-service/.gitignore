@@ -1,0 +1,18 @@
+# Sembunyikan file rahasia
+.env
+
+# Sembunyikan file build hasil kompilasi Go
+/bin
+/tmp
+*.exe
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
+
+# Hide .env.keys
+.env.keys
+
+# Show .env.encrypted
+!.env.encrypted
+!.env.docker.encrypted
