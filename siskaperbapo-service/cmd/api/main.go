@@ -12,9 +12,11 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/farildzaky/siskaperbapo-service/internal/cache"
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
 	"github.com/farildzaky/siskaperbapo-service/internal/handlers"
 	"github.com/farildzaky/siskaperbapo-service/internal/routes"
+	"github.com/farildzaky/siskaperbapo-service/internal/worker"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -23,14 +25,27 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/static"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/farildzaky/siskaperbapo-service/internal/worker"
 )
 
+
+func initializeCache() {
+	redisURL := os.Getenv("REDIS_URL")
+	
+	if redisURL != "" {
+		redisCache, err := cache.NewRedisCache(redisURL)
+		if err != nil {
+			log.Fatalf("Failed to initialize Redis cache: %v\n", err)
+		}
+		cache.GlobalCache = redisCache
+		fmt.Println("Redis cache initialized")
+	} else {
+		fmt.Println("Using SimpleCache (in-memory)")
+	}
+}
 
 func getAllowedOrigins() []string {
 	origins := os.Getenv("ALLOWED_ORIGINS")
 	if origins == "" {
-		// Development defaults
 		origins = "http://localhost:3000,http://localhost:3001,http://localhost:5173"
 	}
 	var result []string
@@ -40,13 +55,10 @@ func getAllowedOrigins() []string {
 	return result
 }
 
-// maskSensitiveData masks sensitive information from error messages
 func maskSensitiveData(msg string) string {
-	// Mask database URL credentials
 	if strings.Contains(msg, "postgres://") {
 		msg = "database connection error (credentials masked)"
 	}
-	// Mask cloudinary credentials
 	if strings.Contains(msg, "cloudinary://") {
 		msg = "cloudinary error (credentials masked)"
 	}
@@ -81,6 +93,8 @@ func main() {
 		log.Fatalf("Failed to initialize Cloudinary: %s\n", maskSensitiveData(errCld.Error()))
 	}
 	fmt.Println("Cloudinary initialized")
+
+	initializeCache()
 
 	app := fiber.New(fiber.Config{
 		AppName:     "Siskaperbapo Service",
@@ -117,13 +131,11 @@ func main() {
 
 	fmt.Println("Routes configured")
 
-	// Run cache warmup asynchronously
 	go func() {
-		time.Sleep(1 * time.Second) // Wait for app to fully start
+		time.Sleep(1 * time.Second) 
 		bpHandler.CacheWarmup()
 	}()
 
-	// Start server in background
 	go func() {
 		if err := app.Listen(":8080"); err != nil && err.Error() != "shutting down" {
 			log.Printf("Server error: %v\n", err)
@@ -140,26 +152,28 @@ func main() {
 
 	fmt.Println("\nShutdown signal received, starting graceful shutdown...") 
 	
-	// Graceful shutdown with 30 second timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	// 1. Stop accepting new requests and wait for in-flight requests
 	fmt.Println("Shutting down HTTP server...")
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
 		log.Printf("HTTP server shutdown error: %v\n", err)
 	}
 	fmt.Println("HTTP server shutdown complete")
 
-	// 2. Stop worker pool
 	fmt.Println("Stopping worker pool...")
 	hargaWorker.Shutdown()
 	fmt.Println("Worker pool stopped")
 
-	// 3. Close database connection pool
 	fmt.Println("Closing database connections...")
 	pool.Close()
 	fmt.Println("Database connections closed")
+
+	if redisCache, ok := cache.GlobalCache.(*cache.RedisCache); ok {
+		fmt.Println("Closing Redis connection...")
+		redisCache.Close()
+		fmt.Println("Redis connection closed")
+	}
 
 	fmt.Println("Graceful shutdown complete")
 }

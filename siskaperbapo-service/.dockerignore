@@ -1,0 +1,46 @@
+# .dockerignore - exclude files from Docker build context
+
+# Version control
+.git
+.gitignore
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.o
+*.a
+*.so
+bin/
+dist/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Test
+*.test
+coverage.out
+.coverage
+
+# Environment
+.env
+.env.local
+
+# Uploads (will be created at runtime)
+uploads/
+
+# Docker
+.dockerignore
+docker-compose.yml
+Dockerfile
+
+# Misc
+README.md
+LICENSE

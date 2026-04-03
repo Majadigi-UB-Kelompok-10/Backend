@@ -105,7 +105,11 @@ func NewBahanPokokHandler(q *db.Queries, cld *cloudinary.Cloudinary, wp *worker.
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
 	slug = slugRegex.ReplaceAllString(slug, "-")
-	return strings.Trim(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		slug = "unnamed"
+	}
+	return slug
 }
 
 // =====================================================================
@@ -348,7 +352,7 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 				Pesan: "Data harga belum tersedia sama sekali untuk komoditas ini hingga tanggal " + tanggalReqStr,
 			})
 		}
-		return c.Status(500).JSON(BaseResponse{Error: "Gagal memeriksa riwayat harga: " + errTanggal.Error()})
+		return c.Status(500).JSON(BaseResponse{Error: "Gagal memeriksa riwayat harga"})
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -580,7 +584,7 @@ func (h *BahanPokokHandler) CreateBahanPokok(c fiber.Ctx) error {
             
             _, err := h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: publicID})
             if err != nil {
-                fmt.Printf("⚠️ Gagal menghapus gambar sampah di Cloudinary (ID: %s): %v\n", publicID, err)
+                fmt.Printf("Failed to delete garbage image from Cloudinary (ID: %s)\n", publicID)
             }
         }(resCld.PublicID)		
 		if strings.Contains(errDb.Error(), "duplicate key value violates unique constraint") {
@@ -644,7 +648,7 @@ func (h *BahanPokokHandler) CreateHargaHarian(c fiber.Ctx) error {
 	})
 
 	if errDb != nil {
-		return c.Status(500).JSON(BaseResponse{Error: "Gagal simpan harga: " + errDb.Error()})
+		return c.Status(500).JSON(BaseResponse{Error: "Gagal menyimpan harga"})
 	}
 
 	cache.GlobalCache.InvalidatePattern("all_bahan:")

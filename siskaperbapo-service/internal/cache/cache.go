@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+type Cache interface {
+	Get(key string) (interface{}, bool)
+	Set(key string, val interface{}, ttl time.Duration)
+	GetImmutable(key string) (interface{}, bool)
+	SetImmutable(key string, val interface{})
+	InvalidatePattern(pattern string)
+	DeleteByPrefix(prefix string)
+	Delete(key string)
+}
+
 type CacheEntry struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -16,7 +26,7 @@ type SimpleCache struct {
 	store map[string]CacheEntry
 }
 
-var GlobalCache = &SimpleCache{
+var GlobalCache Cache = &SimpleCache{
 	store: make(map[string]CacheEntry),
 }
 
@@ -25,7 +35,9 @@ func init() {
 		ticker := time.NewTicker(5 * time.Minute) 
 		defer ticker.Stop()
 		for range ticker.C {
-			GlobalCache.cleanup()
+			if simpleCache, ok := GlobalCache.(*SimpleCache); ok {
+				simpleCache.cleanup()
+			}
 		}
 	}()
 }
