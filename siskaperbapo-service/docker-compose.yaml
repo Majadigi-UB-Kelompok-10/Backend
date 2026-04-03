@@ -8,7 +8,7 @@ services:
       - redis-data:/data
     command: redis-server --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -19,16 +19,16 @@ services:
     image: postgres:18-alpine
     container_name: siskaperbapo-db
     environment:
-      POSTGRES_USER: dzaky
-      POSTGRES_PASSWORD: mYCvSiyKMwGGkhKAYYrZvkzO
-      POSTGRES_DB: siskaperbapo_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
       - ./db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dzaky -d siskaperbapo_db"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,6 +60,7 @@ services:
 volumes:
   postgres-data:
   redis-data:
+
 
 networks:
   app-network:
