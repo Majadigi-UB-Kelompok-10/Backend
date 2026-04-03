@@ -1,0 +1,34 @@
+services:
+  postgre-db:
+    image: postgres:18
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: siskaperbapo_db
+      POSTGRES_PASSWORD: mYCvSiyKMwGGkhKAYYrZvkzO
+    volumes:
+      - ./.postgre-data:/var/lib/postgresql
+      - ./.postgre-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d siskaperbapo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      
+  redis-db:
+    image: redis:8.6
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    
+  siskaperbapo-service:
+    build: .
+    depends_on:
+      postgre-db:
+        condition: service_healthy
+      redis-db:
+        condition: service_healthy
