@@ -13,25 +13,24 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/farildzaky/siskaperbapo-service/internal/cache"
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
-	"github.com/farildzaky/siskaperbapo-service/internal/worker"
 	"github.com/farildzaky/siskaperbapo-service/internal/utils"
+	"github.com/farildzaky/siskaperbapo-service/internal/worker"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	ContextQueryTimeout   = 5 * time.Second
-	ContextUploadTimeout  = 15 * time.Second
-	ContextDBTimeout      = 5 * time.Second
-	CacheWarmupTimeout    = 10 * time.Second
-	CacheShortTTL         = 1 * time.Minute
-	CacheLongTTL          = 1 * time.Hour
-	CacheAreaTTL          = 1 * time.Hour
+	ContextQueryTimeout  = 5 * time.Second
+	ContextUploadTimeout = 15 * time.Second
+	ContextDBTimeout     = 5 * time.Second
+	CacheWarmupTimeout   = 10 * time.Second
+	CacheShortTTL        = 1 * time.Minute
+	CacheLongTTL         = 12 * time.Hour 
+	CacheAreaTTL         = 24 * time.Hour 
 )
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
-
 
 func calculateTrend(prices []int32) (int32, string) {
 	if len(prices) == 0 {
@@ -101,7 +100,6 @@ func NewBahanPokokHandler(q *db.Queries, cld *cloudinary.Cloudinary, wp *worker.
 	}
 }
 
-
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
 	slug = slugRegex.ReplaceAllString(slug, "-")
@@ -110,6 +108,12 @@ func generateSlug(title string) string {
 		slug = "unnamed"
 	}
 	return slug
+}
+
+// Helper untuk membersihkan cache secara global
+func (h *BahanPokokHandler) invalidateAllCache() {
+	cache.GlobalCache.DeleteByPrefix("all_bahan:")
+	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
 }
 
 // =====================================================================
@@ -148,10 +152,12 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 	cacheKey := fmt.Sprintf("all_bahan:%s:page_%d:limit_%d:bahan_pokok_%s:area_%s",
 		tanggalStr, page, limit, bahanPokok, areaSlugPilihan)
 
-	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
-        return c.JSON(cachedData)
-    }
-
+	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+		if bytesData, isBytes := cachedData.([]byte); isBytes {
+			c.Set("Content-Type", "application/json")
+			return c.Send(bytesData)
+		}
+	}
 
 	tanggalPg := pgtype.Date{Time: parsedTime, Valid: true}
 	offset := (page - 1) * limit
@@ -231,7 +237,8 @@ func (h *BahanPokokHandler) GetAllBahanPokok(c fiber.Ctx) error {
 		response.Data = []ItemBahanPokok{}
 	}
 
-	cache.GlobalCache.SetImmutable(cacheKey, response)
+	// PAKAI SET + TTL
+	cache.GlobalCache.Set(cacheKey, response, CacheLongTTL)
 
 	return c.JSON(response)
 }
@@ -326,10 +333,13 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 	}
 
 	cacheKey := fmt.Sprintf("detail_bahan:%s:%s:%s", slugParam, tanggalReqStr, areaSlugPilihan)
-	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
-		return c.JSON(cachedData)
+	
+	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+		if bytesData, isBytes := cachedData.([]byte); isBytes {
+			c.Set("Content-Type", "application/json")
+			return c.Send(bytesData)
+		}
 	}
-
 
 	tanggalReqPg := pgtype.Date{Time: parsedTime, Valid: true}
 
@@ -418,13 +428,13 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 	var finalGrafik []ItemGrafik
 	for _, item := range grafikRes {
 		finalGrafik = append(finalGrafik, ItemGrafik{
-			Tanggal:       item.Tanggal.Time.Format("2006-01-02"), 
+			Tanggal:       item.Tanggal.Time.Format("2006-01-02"),
 			RataRataHarga: item.RataRataHarga,
 		})
 	}
 
 	response := DetailBahanResponse{
-		IDKomoditas:       bahanPokok.ID, 
+		IDKomoditas:       bahanPokok.ID,
 		Komoditas:         bahanPokok.Nama,
 		Slug:              bahanPokok.Slug,
 		Satuan:            bahanPokok.Satuan,
@@ -433,8 +443,8 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 		TanggalDataAktual: tanggalTerakhir.Time.Format("2006-01-02"),
 		AreaPilihan:       areaSlugPilihan,
 		HargaUtama:        hargaUtama,
-		GrafikRiwayat:     finalGrafik,  
-		ListKabKota:       finalKabKota, 
+		GrafikRiwayat:     finalGrafik,
+		ListKabKota:       finalKabKota,
 	}
 
 	if len(rataRes) > 0 {
@@ -450,37 +460,46 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 		for i := len(grafikRes) - 2; i >= 0; i-- {
 			hargaMasaLalu := grafikRes[i].RataRataHarga
 			if hargaMasaLalu != hargaTerkini {
-				if hargaTerkini > hargaMasaLalu { response.Tren = "NAIK" } else { response.Tren = "TURUN" }
+				if hargaTerkini > hargaMasaLalu {
+					response.Tren = "NAIK"
+				} else {
+					response.Tren = "TURUN"
+				}
 				break
 			}
 		}
 	}
 
-	cache.GlobalCache.SetImmutable(cacheKey, response)
-	if response.GrafikRiwayat == nil { 
-		response.GrafikRiwayat = []ItemGrafik{} 
+	if response.GrafikRiwayat == nil {
+		response.GrafikRiwayat = []ItemGrafik{}
 	}
-	if response.ListKabKota == nil { 
-		response.ListKabKota = []ItemKabKota{} 
+	if response.ListKabKota == nil {
+		response.ListKabKota = []ItemKabKota{}
 	}
+
+	cache.GlobalCache.Set(cacheKey, response, CacheLongTTL)
+
 	return c.JSON(response)
 }
 
 // =====================================================================
-// 3. LIST AREA (IMMUTABLE CACHE - No DB query after first request)
+// 3. LIST AREA
 // =====================================================================
 func (h *BahanPokokHandler) GetAllAreas(c fiber.Ctx) error {
 	cacheKey := "all_areas_list"
-	
-	if cachedData, ok := cache.GlobalCache.GetImmutable(cacheKey); ok {
-		return c.JSON(cachedData)
-	}
 
+	// AMBIL CACHE MENTAH SEBAGAI BYTES AGAR JSON STABIL
+	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+		if bytesData, isBytes := cachedData.([]byte); isBytes {
+			c.Set("Content-Type", "application/json")
+			return c.Send(bytesData)
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	areas, err := h.Queries.GetAllAreas(ctx) 
+	areas, err := h.Queries.GetAllAreas(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{
 			Error: "Gagal mengambil daftar area dari database.",
@@ -491,8 +510,8 @@ func (h *BahanPokokHandler) GetAllAreas(c fiber.Ctx) error {
 	for _, a := range areas {
 		finalAreas = append(finalAreas, ItemArea{
 			ID:   a.ID,
-			Nama: a.Nama,   
-			Slug: a.Slug,   
+			Nama: a.Nama,
+			Slug: a.Slug,
 		})
 	}
 
@@ -505,7 +524,7 @@ func (h *BahanPokokHandler) GetAllAreas(c fiber.Ctx) error {
 		Data:  finalAreas,
 	}
 
-	cache.GlobalCache.SetImmutable(cacheKey, response)
+	cache.GlobalCache.Set(cacheKey, response, CacheAreaTTL)
 
 	return c.JSON(response)
 }
@@ -539,22 +558,22 @@ func (h *BahanPokokHandler) CreateBahanPokok(c fiber.Ctx) error {
 	defer file.Close()
 
 	buffer := make([]byte, 512)
-    _, errRead := file.Read(buffer)
-    if errRead != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal membaca konten file"})
-    }
+	_, errRead := file.Read(buffer)
+	if errRead != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal membaca konten file"})
+	}
 
 	if _, errSeek := file.Seek(0, 0); errSeek != nil {
-         return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal me-reset pembacaan file"})
-    }
+		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal me-reset pembacaan file"})
+	}
 
 	mimeType := http.DetectContentType(buffer)
 
-	if mimeType != "image/jpeg" && 
-       mimeType != "image/png" && 
-       mimeType != "image/webp" {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Virus terdeteksi! File harus berupa gambar asli (JPG, PNG, atau WEBP)!"})
-    }
+	if mimeType != "image/jpeg" &&
+		mimeType != "image/png" &&
+		mimeType != "image/webp" {
+		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Virus terdeteksi! File harus berupa gambar asli (JPG, PNG, atau WEBP)!"})
+	}
 
 	ctxCld, cancelCld := context.WithTimeout(context.Background(), ContextUploadTimeout)
 	defer cancelCld()
@@ -579,21 +598,21 @@ func (h *BahanPokokHandler) CreateBahanPokok(c fiber.Ctx) error {
 
 	if errDb != nil {
 		go func(publicID string) {
-            ctxHapus, cancelHapus := context.WithTimeout(context.Background(), 10*time.Second)
-            defer cancelHapus()
-            
-            _, err := h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: publicID})
-            if err != nil {
-                fmt.Printf("Failed to delete garbage image from Cloudinary (ID: %s)\n", publicID)
-            }
-        }(resCld.PublicID)		
+			ctxHapus, cancelHapus := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelHapus()
+
+			_, err := h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: publicID})
+			if err != nil {
+				fmt.Printf("Failed to delete garbage image from Cloudinary (ID: %s)\n", publicID)
+			}
+		}(resCld.PublicID)
 		if strings.Contains(errDb.Error(), "duplicate key value violates unique constraint") {
 			return c.Status(fiber.StatusConflict).JSON(BaseResponse{Error: "Bahan pokok ini sudah ada di database!"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal menyimpan ke database."})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(fiber.StatusCreated).JSON(BaseResponse{
 		Pesan: "Mantap! Komoditas berhasil disimpan.",
@@ -651,8 +670,7 @@ func (h *BahanPokokHandler) CreateHargaHarian(c fiber.Ctx) error {
 		return c.Status(500).JSON(BaseResponse{Error: "Gagal menyimpan harga"})
 	}
 
-	cache.GlobalCache.InvalidatePattern("all_bahan:")
-	cache.GlobalCache.InvalidatePattern("detail_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(201).JSON(BaseResponse{
 		Pesan: "Mantap! Harga " + namaKomoditas + " di " + namaArea + " berhasil dicatat.",
@@ -672,14 +690,14 @@ func (h *BahanPokokHandler) CreateHargaHarian(c fiber.Ctx) error {
 func (h *BahanPokokHandler) UpdateHargaHarian(c fiber.Ctx) error {
 	idStr := c.Params("id")
 	idHarga, err := strconv.Atoi(idStr)
-    if err != nil || idHarga <= 0 {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
-    }
+	if err != nil || idHarga <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
+	}
 
-    hargaBaru, err := strconv.Atoi(c.FormValue("harga"))
-    if err != nil || hargaBaru <= 0 {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Harga harus berupa angka yang valid!"})
-    }
+	hargaBaru, err := strconv.Atoi(c.FormValue("harga"))
+	if err != nil || hargaBaru <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Harga harus berupa angka yang valid!"})
+	}
 
 	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
 	defer cancelDb()
@@ -693,8 +711,7 @@ func (h *BahanPokokHandler) UpdateHargaHarian(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengupdate harga."})
 	}
 
-	cache.GlobalCache.InvalidatePattern("all_bahan:")
-	cache.GlobalCache.InvalidatePattern("detail_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Harga berhasil direvisi.",
@@ -712,9 +729,9 @@ func (h *BahanPokokHandler) UpdateHargaHarian(c fiber.Ctx) error {
 func (h *BahanPokokHandler) DeleteHargaHarian(c fiber.Ctx) error {
 	idStr := c.Params("id")
 	idHarga, err := strconv.Atoi(idStr)
-    if err != nil || idHarga <= 0 {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
-    }
+	if err != nil || idHarga <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
+	}
 
 	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
 	defer cancelDb()
@@ -724,8 +741,7 @@ func (h *BahanPokokHandler) DeleteHargaHarian(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal menghapus harga harian."})
 	}
 
-	cache.GlobalCache.InvalidatePattern("all_bahan:")
-	cache.GlobalCache.InvalidatePattern("detail_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Data harga berhasil dihapus.",
@@ -749,7 +765,7 @@ func (h *BahanPokokHandler) UpdateBahanPokok(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Data bahan pokok tidak ditemukan!"})
 	}
 
-	finalImageUrl := oldData.GambarUrl 
+	finalImageUrl := oldData.GambarUrl
 
 	nama := strings.TrimSpace(c.FormValue("nama"))
 	satuan := strings.TrimSpace(c.FormValue("satuan"))
@@ -810,21 +826,20 @@ func (h *BahanPokokHandler) UpdateBahanPokok(c fiber.Ctx) error {
 		}
 	}
 
-	slugBaru := generateSlug(nama) 
+	slugBaru := generateSlug(nama)
 	dataUpdate, errDb := h.Queries.UpdateBahanPokok(ctxDb, db.UpdateBahanPokokParams{
 		ID:        int32(id),
 		Nama:      nama,
 		Slug:      slugBaru,
 		Satuan:    satuan,
-		GambarUrl: finalImageUrl, 
+		GambarUrl: finalImageUrl,
 	})
 
 	if errDb != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengupdate bahan pokok di database."})
 	}
 
-	cache.GlobalCache.InvalidatePattern("all_bahan:")
-	cache.GlobalCache.InvalidatePattern("detail_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Komoditas berhasil diperbarui.",
@@ -863,22 +878,21 @@ func (h *BahanPokokHandler) DeleteBahanPokok(c fiber.Ctx) error {
 
 	if oldData.GambarUrl.Valid && oldData.GambarUrl.String != "" {
 		go func(imageUrl string) {
-			publicID := utils.ExtractPublicID(imageUrl) 
-			
+			publicID := utils.ExtractPublicID(imageUrl)
+
 			if publicID != "" {
 				ctxCld, cancelCld := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancelCld()
-				
+
 				_, errCld := h.Cld.Upload.Destroy(ctxCld, uploader.DestroyParams{PublicID: publicID})
 				if errCld != nil {
-                        h.Logger.Error("Gagal menghapus gambar lama di Cloudinary", errCld, WithContext("public_id", publicID))
-                    }
+					h.Logger.Error("Gagal menghapus gambar lama di Cloudinary", errCld, WithContext("public_id", publicID))
+				}
 			}
-		}(oldData.GambarUrl.String) 
+		}(oldData.GambarUrl.String)
 	}
 
-	cache.GlobalCache.DeleteByPrefix("all_bahan:")
-	cache.GlobalCache.DeleteByPrefix("detail_bahan:")
+	h.invalidateAllCache()
 
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Bahan pokok dan fotonya berhasil dihapus secara permanen!",

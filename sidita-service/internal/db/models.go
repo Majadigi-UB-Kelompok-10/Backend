@@ -41,6 +41,7 @@ type Event struct {
 	TanggalSelesai pgtype.Date        `json:"tanggal_selesai"`
 	Tahun          pgtype.Int2        `json:"tahun"`
 	InfoTiket      pgtype.Text        `json:"info_tiket"`
+	HargaTiket     pgtype.Int4        `json:"harga_tiket"`
 	Lat            pgtype.Numeric     `json:"lat"`
 	Lng            pgtype.Numeric     `json:"lng"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
