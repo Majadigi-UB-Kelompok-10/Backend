@@ -4,7 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE master_area (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nama VARCHAR(100) UNIQUE NOT NULL, 
-    slug VARCHAR(100) UNIQUE NOT NULL  
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    lat DECIMAL(10, 8), 
+    lng DECIMAL(11, 8)
 );
 
 CREATE TABLE destinasi (
@@ -67,12 +69,10 @@ CREATE INDEX idx_master_area_slug ON master_area(slug);
 CREATE INDEX idx_destinasi_slug     ON destinasi(slug);
 CREATE INDEX idx_destinasi_area     ON destinasi(area_id);
 CREATE INDEX idx_destinasi_kategori ON destinasi(kategori);
--- Search Index modern menggunakan pg_trgm (bisa mencari partial words/typo)
 CREATE INDEX idx_destinasi_nama_search ON destinasi USING GIN (nama gin_trgm_ops);
 
 CREATE INDEX idx_hotel_slug  ON hotel(slug);
 CREATE INDEX idx_hotel_area  ON hotel(area_id);
--- Search Index modern menggunakan pg_trgm
 CREATE INDEX idx_hotel_nama_search ON hotel USING GIN (nama gin_trgm_ops);
 
 CREATE INDEX idx_event_slug         ON event(slug);
