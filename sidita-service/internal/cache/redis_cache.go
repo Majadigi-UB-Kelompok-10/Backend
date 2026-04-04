@@ -34,20 +34,16 @@ func (r *RedisCache) contextWithTimeout() (context.Context, context.CancelFunc) 
 	return context.WithTimeout(context.Background(), 2*time.Second)
 }
 
-func (r *RedisCache) Get(key string) (interface{}, bool) {
-	ctx, cancel := r.contextWithTimeout()
-	defer cancel()
+func (r *RedisCache) Get(key string) ([]byte, bool) {
+    ctx, cancel := r.contextWithTimeout()
+    defer cancel()
 
-	val, err := r.client.Get(ctx, key).Result()
-	if err == redis.Nil || err != nil {
-		return nil, false
-	}
+    val, err := r.client.Get(ctx, key).Bytes()
+    if err == redis.Nil || err != nil {
+        return nil, false
+    }
 
-	var data interface{}
-	if err := json.Unmarshal([]byte(val), &data); err != nil {
-		return nil, false
-	}
-	return data, true
+    return val, true
 }
 
 func (r *RedisCache) Set(key string, val interface{}) {
@@ -59,7 +55,6 @@ func (r *RedisCache) Set(key string, val interface{}) {
 		return
 	}
 
-	// Angka 0 di belakang menandakan bahwa data ini Immutable (Tidak akan expired)
 	r.client.Set(ctx, key, data, 0)
 }
 

@@ -9,61 +9,63 @@ import (
 )
 
 type Destinasi struct {
-	ID            int32
-	AreaID        int32
-	Kategori      string
-	Nama          string
-	Slug          string
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText string
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
-	CreatedAt     pgtype.Timestamptz
+	ID            int32              `json:"id"`
+	AreaID        int32              `json:"area_id"`
+	Kategori      string             `json:"kategori"`
+	Nama          string             `json:"nama"`
+	Slug          string             `json:"slug"`
+	GambarUrl     string             `json:"gambar_url"`
+	Deskripsi     string             `json:"deskripsi"`
+	Alamat        string             `json:"alamat"`
+	HighlightText string             `json:"highlight_text"`
+	Lat           pgtype.Numeric     `json:"lat"`
+	Lng           pgtype.Numeric     `json:"lng"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type DestinasiGambar struct {
-	ID          int32
-	DestinasiID int32
-	GambarUrl   string
-	Urutan      pgtype.Int4
+	ID          int32       `json:"id"`
+	DestinasiID int32       `json:"destinasi_id"`
+	GambarUrl   string      `json:"gambar_url"`
+	Urutan      pgtype.Int4 `json:"urutan"`
 }
 
 type Event struct {
-	ID             int32
-	AreaID         int32
-	Nama           string
-	Slug           string
-	GambarUrl      string
-	Deskripsi      string
-	TanggalMulai   pgtype.Date
-	TanggalSelesai pgtype.Date
-	Tahun          pgtype.Int2
-	InfoTiket      pgtype.Text
-	Lat            pgtype.Numeric
-	Lng            pgtype.Numeric
-	CreatedAt      pgtype.Timestamptz
+	ID             int32              `json:"id"`
+	AreaID         int32              `json:"area_id"`
+	Nama           string             `json:"nama"`
+	Slug           string             `json:"slug"`
+	GambarUrl      string             `json:"gambar_url"`
+	Deskripsi      string             `json:"deskripsi"`
+	TanggalMulai   pgtype.Date        `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date        `json:"tanggal_selesai"`
+	Tahun          pgtype.Int2        `json:"tahun"`
+	InfoTiket      pgtype.Text        `json:"info_tiket"`
+	Lat            pgtype.Numeric     `json:"lat"`
+	Lng            pgtype.Numeric     `json:"lng"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Hotel struct {
-	ID            int32
-	AreaID        int32
-	Nama          string
-	Slug          string
-	HargaMulai    pgtype.Int4
-	Bintang       pgtype.Int2
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText pgtype.Text
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
-	CreatedAt     pgtype.Timestamptz
+	ID            int32              `json:"id"`
+	AreaID        int32              `json:"area_id"`
+	Nama          string             `json:"nama"`
+	Slug          string             `json:"slug"`
+	HargaMulai    pgtype.Int4        `json:"harga_mulai"`
+	Bintang       pgtype.Int2        `json:"bintang"`
+	GambarUrl     string             `json:"gambar_url"`
+	Deskripsi     string             `json:"deskripsi"`
+	Alamat        string             `json:"alamat"`
+	HighlightText pgtype.Text        `json:"highlight_text"`
+	Lat           pgtype.Numeric     `json:"lat"`
+	Lng           pgtype.Numeric     `json:"lng"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type MasterArea struct {
-	ID   int32
-	Nama string
-	Slug string
+	ID   int32          `json:"id"`
+	Nama string         `json:"nama"`
+	Slug string         `json:"slug"`
+	Lat  pgtype.Numeric `json:"lat"`
+	Lng  pgtype.Numeric `json:"lng"`
 }
