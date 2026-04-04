@@ -42,16 +42,26 @@ WHERE
     ($1::text IS NULL OR e.nama ILIKE '%' || $1::text || '%')
     AND ($2::int IS NULL OR e.area_id = $2::int)
     AND ($3::smallint IS NULL OR e.tahun = $3::smallint)
+    AND ($4::date IS NULL OR e.tanggal_mulai >= $4::date)
+    AND ($5::date IS NULL OR e.tanggal_mulai < $5::date)
 `
 
 type CountEventParams struct {
-	Search pgtype.Text `json:"search"`
-	AreaID pgtype.Int4 `json:"area_id"`
-	Tahun  pgtype.Int2 `json:"tahun"`
+	Search    pgtype.Text `json:"search"`
+	AreaID    pgtype.Int4 `json:"area_id"`
+	Tahun     pgtype.Int2 `json:"tahun"`
+	StartDate pgtype.Date `json:"start_date"`
+	EndDate   pgtype.Date `json:"end_date"`
 }
 
 func (q *Queries) CountEvent(ctx context.Context, arg CountEventParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countEvent, arg.Search, arg.AreaID, arg.Tahun)
+	row := q.db.QueryRow(ctx, countEvent,
+		arg.Search,
+		arg.AreaID,
+		arg.Tahun,
+		arg.StartDate,
+		arg.EndDate,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -144,9 +154,9 @@ func (q *Queries) CreateDestinasiGambar(ctx context.Context, arg CreateDestinasi
 
 const createEvent = `-- name: CreateEvent :one
 INSERT INTO event (
-    area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, info_tiket, lat, lng
+    area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, info_tiket, harga_tiket, lat, lng
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING id, created_at
 `
 
@@ -159,6 +169,7 @@ type CreateEventParams struct {
 	TanggalMulai   pgtype.Date    `json:"tanggal_mulai"`
 	TanggalSelesai pgtype.Date    `json:"tanggal_selesai"`
 	InfoTiket      pgtype.Text    `json:"info_tiket"`
+	HargaTiket     pgtype.Int4    `json:"harga_tiket"`
 	Lat            pgtype.Numeric `json:"lat"`
 	Lng            pgtype.Numeric `json:"lng"`
 }
@@ -178,6 +189,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Creat
 		arg.TanggalMulai,
 		arg.TanggalSelesai,
 		arg.InfoTiket,
+		arg.HargaTiket,
 		arg.Lat,
 		arg.Lng,
 	)
@@ -238,6 +250,24 @@ DELETE FROM destinasi WHERE id = $1
 
 func (q *Queries) DeleteDestinasi(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteDestinasi, id)
+	return err
+}
+
+const deleteEvent = `-- name: DeleteEvent :exec
+DELETE FROM event WHERE id = $1
+`
+
+func (q *Queries) DeleteEvent(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteEvent, id)
+	return err
+}
+
+const deleteHotel = `-- name: DeleteHotel :exec
+DELETE FROM hotel WHERE id = $1
+`
+
+func (q *Queries) DeleteHotel(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteHotel, id)
 	return err
 }
 
@@ -396,35 +426,16 @@ func (q *Queries) GetDestinasiBySlug(ctx context.Context, slug string) (GetDesti
 	return i, err
 }
 
-const getEventBySlug = `-- name: GetEventBySlug :one
-SELECT 
-    e.id, e.nama, e.slug, e.gambar_url, e.deskripsi, e.tanggal_mulai, 
-    e.tanggal_selesai, e.tahun, e.info_tiket, e.lat, e.lng, a.nama AS kota
-FROM event e
-JOIN master_area a ON e.area_id = a.id
-WHERE e.slug = $1 LIMIT 1
+const getEventByID = `-- name: GetEventByID :one
+SELECT id, area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, tahun, info_tiket, harga_tiket, lat, lng, created_at FROM event WHERE id = $1 LIMIT 1
 `
 
-type GetEventBySlugRow struct {
-	ID             int32          `json:"id"`
-	Nama           string         `json:"nama"`
-	Slug           string         `json:"slug"`
-	GambarUrl      string         `json:"gambar_url"`
-	Deskripsi      string         `json:"deskripsi"`
-	TanggalMulai   pgtype.Date    `json:"tanggal_mulai"`
-	TanggalSelesai pgtype.Date    `json:"tanggal_selesai"`
-	Tahun          pgtype.Int2    `json:"tahun"`
-	InfoTiket      pgtype.Text    `json:"info_tiket"`
-	Lat            pgtype.Numeric `json:"lat"`
-	Lng            pgtype.Numeric `json:"lng"`
-	Kota           string         `json:"kota"`
-}
-
-func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (GetEventBySlugRow, error) {
-	row := q.db.QueryRow(ctx, getEventBySlug, slug)
-	var i GetEventBySlugRow
+func (q *Queries) GetEventByID(ctx context.Context, id int32) (Event, error) {
+	row := q.db.QueryRow(ctx, getEventByID, id)
+	var i Event
 	err := row.Scan(
 		&i.ID,
+		&i.AreaID,
 		&i.Nama,
 		&i.Slug,
 		&i.GambarUrl,
@@ -433,6 +444,56 @@ func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (GetEventBySl
 		&i.TanggalSelesai,
 		&i.Tahun,
 		&i.InfoTiket,
+		&i.HargaTiket,
+		&i.Lat,
+		&i.Lng,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getEventBySlug = `-- name: GetEventBySlug :one
+SELECT 
+    e.id, e.area_id, e.nama, e.slug, e.gambar_url, e.deskripsi, e.tanggal_mulai, 
+    e.tanggal_selesai, e.tahun, e.info_tiket, e.harga_tiket, 
+    e.lat::float8 AS lat, e.lng::float8 AS lng, a.nama AS kota
+FROM event e
+JOIN master_area a ON e.area_id = a.id
+WHERE e.slug = $1 LIMIT 1
+`
+
+type GetEventBySlugRow struct {
+	ID             int32       `json:"id"`
+	AreaID         int32       `json:"area_id"`
+	Nama           string      `json:"nama"`
+	Slug           string      `json:"slug"`
+	GambarUrl      string      `json:"gambar_url"`
+	Deskripsi      string      `json:"deskripsi"`
+	TanggalMulai   pgtype.Date `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date `json:"tanggal_selesai"`
+	Tahun          pgtype.Int2 `json:"tahun"`
+	InfoTiket      pgtype.Text `json:"info_tiket"`
+	HargaTiket     pgtype.Int4 `json:"harga_tiket"`
+	Lat            float64     `json:"lat"`
+	Lng            float64     `json:"lng"`
+	Kota           string      `json:"kota"`
+}
+
+func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (GetEventBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getEventBySlug, slug)
+	var i GetEventBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.AreaID,
+		&i.Nama,
+		&i.Slug,
+		&i.GambarUrl,
+		&i.Deskripsi,
+		&i.TanggalMulai,
+		&i.TanggalSelesai,
+		&i.Tahun,
+		&i.InfoTiket,
+		&i.HargaTiket,
 		&i.Lat,
 		&i.Lng,
 		&i.Kota,
@@ -440,28 +501,54 @@ func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (GetEventBySl
 	return i, err
 }
 
+const getHotelByID = `-- name: GetHotelByID :one
+SELECT id, area_id, nama, slug, harga_mulai, bintang, gambar_url, deskripsi, alamat, highlight_text, lat, lng, created_at FROM hotel WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetHotelByID(ctx context.Context, id int32) (Hotel, error) {
+	row := q.db.QueryRow(ctx, getHotelByID, id)
+	var i Hotel
+	err := row.Scan(
+		&i.ID,
+		&i.AreaID,
+		&i.Nama,
+		&i.Slug,
+		&i.HargaMulai,
+		&i.Bintang,
+		&i.GambarUrl,
+		&i.Deskripsi,
+		&i.Alamat,
+		&i.HighlightText,
+		&i.Lat,
+		&i.Lng,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getHotelBySlug = `-- name: GetHotelBySlug :one
 SELECT 
-    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, 
-    h.deskripsi, h.alamat, h.highlight_text, h.lat, h.lng, a.nama AS kota
+    h.id, h.area_id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, 
+    h.deskripsi, h.alamat, h.highlight_text, h.lat::float8 AS lat, h.lng::float8 AS lng, a.nama AS kota
 FROM hotel h
 JOIN master_area a ON h.area_id = a.id
 WHERE h.slug = $1 LIMIT 1
 `
 
 type GetHotelBySlugRow struct {
-	ID            int32          `json:"id"`
-	Nama          string         `json:"nama"`
-	Slug          string         `json:"slug"`
-	HargaMulai    pgtype.Int4    `json:"harga_mulai"`
-	Bintang       pgtype.Int2    `json:"bintang"`
-	GambarUrl     string         `json:"gambar_url"`
-	Deskripsi     string         `json:"deskripsi"`
-	Alamat        string         `json:"alamat"`
-	HighlightText pgtype.Text    `json:"highlight_text"`
-	Lat           pgtype.Numeric `json:"lat"`
-	Lng           pgtype.Numeric `json:"lng"`
-	Kota          string         `json:"kota"`
+	ID            int32       `json:"id"`
+	AreaID        int32       `json:"area_id"`
+	Nama          string      `json:"nama"`
+	Slug          string      `json:"slug"`
+	HargaMulai    pgtype.Int4 `json:"harga_mulai"`
+	Bintang       pgtype.Int2 `json:"bintang"`
+	GambarUrl     string      `json:"gambar_url"`
+	Deskripsi     string      `json:"deskripsi"`
+	Alamat        string      `json:"alamat"`
+	HighlightText pgtype.Text `json:"highlight_text"`
+	Lat           float64     `json:"lat"`
+	Lng           float64     `json:"lng"`
+	Kota          string      `json:"kota"`
 }
 
 func (q *Queries) GetHotelBySlug(ctx context.Context, slug string) (GetHotelBySlugRow, error) {
@@ -469,6 +556,7 @@ func (q *Queries) GetHotelBySlug(ctx context.Context, slug string) (GetHotelBySl
 	var i GetHotelBySlugRow
 	err := row.Scan(
 		&i.ID,
+		&i.AreaID,
 		&i.Nama,
 		&i.Slug,
 		&i.HargaMulai,
@@ -486,7 +574,9 @@ func (q *Queries) GetHotelBySlug(ctx context.Context, slug string) (GetHotelBySl
 
 const listDestinasi = `-- name: ListDestinasi :many
 SELECT 
-    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.alamat, a.nama AS kota
+    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.alamat, 
+    d.lat::float8 AS lat, d.lng::float8 AS lng, 
+    a.nama AS kota
 FROM destinasi d
 JOIN master_area a ON d.area_id = a.id
 WHERE 
@@ -508,13 +598,15 @@ type ListDestinasiParams struct {
 }
 
 type ListDestinasiRow struct {
-	ID        int32  `json:"id"`
-	Kategori  string `json:"kategori"`
-	Nama      string `json:"nama"`
-	Slug      string `json:"slug"`
-	GambarUrl string `json:"gambar_url"`
-	Alamat    string `json:"alamat"`
-	Kota      string `json:"kota"`
+	ID        int32   `json:"id"`
+	Kategori  string  `json:"kategori"`
+	Nama      string  `json:"nama"`
+	Slug      string  `json:"slug"`
+	GambarUrl string  `json:"gambar_url"`
+	Alamat    string  `json:"alamat"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	Kota      string  `json:"kota"`
 }
 
 func (q *Queries) ListDestinasi(ctx context.Context, arg ListDestinasiParams) ([]ListDestinasiRow, error) {
@@ -539,6 +631,8 @@ func (q *Queries) ListDestinasi(ctx context.Context, arg ListDestinasiParams) ([
 			&i.Slug,
 			&i.GambarUrl,
 			&i.Alamat,
+			&i.Lat,
+			&i.Lng,
 			&i.Kota,
 		); err != nil {
 			return nil, err
@@ -638,21 +732,26 @@ func (q *Queries) ListDestinasiMaps(ctx context.Context, arg ListDestinasiMapsPa
 const listEvent = `-- name: ListEvent :many
 SELECT 
     e.id, e.nama, e.slug, e.gambar_url, e.tanggal_mulai, e.tanggal_selesai, 
-    e.tahun, e.info_tiket, a.nama AS kota
+    e.tahun, e.info_tiket, e.harga_tiket, a.nama AS kota,
+    e.lat::float8 AS lat, e.lng::float8 AS lng
 FROM event e
 JOIN master_area a ON e.area_id = a.id
 WHERE 
     ($1::text IS NULL OR e.nama ILIKE '%' || $1::text || '%')
     AND ($2::int IS NULL OR e.area_id = $2::int)
     AND ($3::smallint IS NULL OR e.tahun = $3::smallint)
+    AND ($4::date IS NULL OR e.tanggal_mulai >= $4::date)
+    AND ($5::date IS NULL OR e.tanggal_mulai < $5::date)
 ORDER BY e.tanggal_mulai ASC
-LIMIT $5::int OFFSET $4::int
+LIMIT $7::int OFFSET $6::int
 `
 
 type ListEventParams struct {
 	Search     pgtype.Text `json:"search"`
 	AreaID     pgtype.Int4 `json:"area_id"`
 	Tahun      pgtype.Int2 `json:"tahun"`
+	StartDate  pgtype.Date `json:"start_date"`
+	EndDate    pgtype.Date `json:"end_date"`
 	OffsetData int32       `json:"offset_data"`
 	LimitData  int32       `json:"limit_data"`
 }
@@ -666,7 +765,10 @@ type ListEventRow struct {
 	TanggalSelesai pgtype.Date `json:"tanggal_selesai"`
 	Tahun          pgtype.Int2 `json:"tahun"`
 	InfoTiket      pgtype.Text `json:"info_tiket"`
+	HargaTiket     pgtype.Int4 `json:"harga_tiket"`
 	Kota           string      `json:"kota"`
+	Lat            float64     `json:"lat"`
+	Lng            float64     `json:"lng"`
 }
 
 func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]ListEventRow, error) {
@@ -674,6 +776,8 @@ func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]ListEve
 		arg.Search,
 		arg.AreaID,
 		arg.Tahun,
+		arg.StartDate,
+		arg.EndDate,
 		arg.OffsetData,
 		arg.LimitData,
 	)
@@ -693,7 +797,63 @@ func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]ListEve
 			&i.TanggalSelesai,
 			&i.Tahun,
 			&i.InfoTiket,
+			&i.HargaTiket,
 			&i.Kota,
+			&i.Lat,
+			&i.Lng,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventMaps = `-- name: ListEventMaps :many
+SELECT 
+    id, nama, slug, tanggal_mulai, gambar_url,
+    lat::float8 AS lat, lng::float8 AS lng
+FROM event
+WHERE
+    ($1::int IS NULL OR area_id = $1::int) AND
+    ($2::text IS NULL OR nama ILIKE '%' || $2::text || '%')
+`
+
+type ListEventMapsParams struct {
+	AreaID pgtype.Int4 `json:"area_id"`
+	Search pgtype.Text `json:"search"`
+}
+
+type ListEventMapsRow struct {
+	ID           int32       `json:"id"`
+	Nama         string      `json:"nama"`
+	Slug         string      `json:"slug"`
+	TanggalMulai pgtype.Date `json:"tanggal_mulai"`
+	GambarUrl    string      `json:"gambar_url"`
+	Lat          float64     `json:"lat"`
+	Lng          float64     `json:"lng"`
+}
+
+func (q *Queries) ListEventMaps(ctx context.Context, arg ListEventMapsParams) ([]ListEventMapsRow, error) {
+	rows, err := q.db.Query(ctx, listEventMaps, arg.AreaID, arg.Search)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEventMapsRow
+	for rows.Next() {
+		var i ListEventMapsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Slug,
+			&i.TanggalMulai,
+			&i.GambarUrl,
+			&i.Lat,
+			&i.Lng,
 		); err != nil {
 			return nil, err
 		}
@@ -707,7 +867,8 @@ func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]ListEve
 
 const listHotel = `-- name: ListHotel :many
 SELECT 
-    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, a.nama AS kota
+    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, a.nama AS kota,
+    h.lat::float8 AS lat, h.lng::float8 AS lng
 FROM hotel h
 JOIN master_area a ON h.area_id = a.id
 WHERE 
@@ -734,6 +895,8 @@ type ListHotelRow struct {
 	Bintang    pgtype.Int2 `json:"bintang"`
 	GambarUrl  string      `json:"gambar_url"`
 	Kota       string      `json:"kota"`
+	Lat        float64     `json:"lat"`
+	Lng        float64     `json:"lng"`
 }
 
 func (q *Queries) ListHotel(ctx context.Context, arg ListHotelParams) ([]ListHotelRow, error) {
@@ -759,6 +922,59 @@ func (q *Queries) ListHotel(ctx context.Context, arg ListHotelParams) ([]ListHot
 			&i.Bintang,
 			&i.GambarUrl,
 			&i.Kota,
+			&i.Lat,
+			&i.Lng,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHotelMaps = `-- name: ListHotelMaps :many
+SELECT id, nama, slug, bintang, lat, lng, gambar_url
+FROM hotel
+WHERE
+    ($1::int IS NULL OR area_id = $1::int) AND
+    ($2::text IS NULL OR nama ILIKE '%' || $2::text || '%')
+`
+
+type ListHotelMapsParams struct {
+	AreaID pgtype.Int4 `json:"area_id"`
+	Search pgtype.Text `json:"search"`
+}
+
+type ListHotelMapsRow struct {
+	ID        int32          `json:"id"`
+	Nama      string         `json:"nama"`
+	Slug      string         `json:"slug"`
+	Bintang   pgtype.Int2    `json:"bintang"`
+	Lat       pgtype.Numeric `json:"lat"`
+	Lng       pgtype.Numeric `json:"lng"`
+	GambarUrl string         `json:"gambar_url"`
+}
+
+func (q *Queries) ListHotelMaps(ctx context.Context, arg ListHotelMapsParams) ([]ListHotelMapsRow, error) {
+	rows, err := q.db.Query(ctx, listHotelMaps, arg.AreaID, arg.Search)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHotelMapsRow
+	for rows.Next() {
+		var i ListHotelMapsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Slug,
+			&i.Bintang,
+			&i.Lat,
+			&i.Lng,
+			&i.GambarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -814,6 +1030,124 @@ func (q *Queries) UpdateDestinasi(ctx context.Context, arg UpdateDestinasiParams
 		arg.Lng,
 	)
 	var i UpdateDestinasiRow
+	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
+	return i, err
+}
+
+const updateEvent = `-- name: UpdateEvent :one
+UPDATE event
+SET 
+    area_id = $2,
+    nama = $3,
+    slug = $4,
+    gambar_url = $5,
+    deskripsi = $6,
+    tanggal_mulai = $7,
+    tanggal_selesai = $8,
+    info_tiket = $9,
+    harga_tiket = $10,
+    lat = $11,
+    lng = $12
+WHERE id = $1
+RETURNING id, nama, slug
+`
+
+type UpdateEventParams struct {
+	ID             int32          `json:"id"`
+	AreaID         int32          `json:"area_id"`
+	Nama           string         `json:"nama"`
+	Slug           string         `json:"slug"`
+	GambarUrl      string         `json:"gambar_url"`
+	Deskripsi      string         `json:"deskripsi"`
+	TanggalMulai   pgtype.Date    `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date    `json:"tanggal_selesai"`
+	InfoTiket      pgtype.Text    `json:"info_tiket"`
+	HargaTiket     pgtype.Int4    `json:"harga_tiket"`
+	Lat            pgtype.Numeric `json:"lat"`
+	Lng            pgtype.Numeric `json:"lng"`
+}
+
+type UpdateEventRow struct {
+	ID   int32  `json:"id"`
+	Nama string `json:"nama"`
+	Slug string `json:"slug"`
+}
+
+func (q *Queries) UpdateEvent(ctx context.Context, arg UpdateEventParams) (UpdateEventRow, error) {
+	row := q.db.QueryRow(ctx, updateEvent,
+		arg.ID,
+		arg.AreaID,
+		arg.Nama,
+		arg.Slug,
+		arg.GambarUrl,
+		arg.Deskripsi,
+		arg.TanggalMulai,
+		arg.TanggalSelesai,
+		arg.InfoTiket,
+		arg.HargaTiket,
+		arg.Lat,
+		arg.Lng,
+	)
+	var i UpdateEventRow
+	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
+	return i, err
+}
+
+const updateHotel = `-- name: UpdateHotel :one
+UPDATE hotel
+SET 
+    area_id = $2,
+    nama = $3,
+    slug = $4,
+    harga_mulai = $5,
+    bintang = $6,
+    gambar_url = $7,
+    deskripsi = $8,
+    alamat = $9,
+    highlight_text = $10,
+    lat = $11,
+    lng = $12
+WHERE id = $1
+RETURNING id, nama, slug
+`
+
+type UpdateHotelParams struct {
+	ID            int32          `json:"id"`
+	AreaID        int32          `json:"area_id"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	HargaMulai    pgtype.Int4    `json:"harga_mulai"`
+	Bintang       pgtype.Int2    `json:"bintang"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText pgtype.Text    `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
+}
+
+type UpdateHotelRow struct {
+	ID   int32  `json:"id"`
+	Nama string `json:"nama"`
+	Slug string `json:"slug"`
+}
+
+func (q *Queries) UpdateHotel(ctx context.Context, arg UpdateHotelParams) (UpdateHotelRow, error) {
+	row := q.db.QueryRow(ctx, updateHotel,
+		arg.ID,
+		arg.AreaID,
+		arg.Nama,
+		arg.Slug,
+		arg.HargaMulai,
+		arg.Bintang,
+		arg.GambarUrl,
+		arg.Deskripsi,
+		arg.Alamat,
+		arg.HighlightText,
+		arg.Lat,
+		arg.Lng,
+	)
+	var i UpdateHotelRow
 	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
 	return i, err
 }
