@@ -20,9 +20,11 @@ SELECT * FROM destinasi WHERE id = $1 LIMIT 1;
 SELECT * FROM master_area WHERE id = $1 LIMIT 1;
 
 -- name: ListDestinasiMaps :many
-SELECT id, nama, slug, kategori, lat, lng 
+SELECT id, nama, slug, kategori, lat, lng, gambar_url
 FROM destinasi
-WHERE (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int);
+WHERE
+    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int) AND
+    (sqlc.narg('search')::text IS NULL OR nama ILIKE '%' || sqlc.narg('search')::text || '%');
 
 -- name: ListDestinasi :many
 SELECT 
@@ -50,7 +52,7 @@ WHERE
 
 -- name: GetDestinasiBySlug :one
 SELECT 
-    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.deskripsi, 
+    d.id, d.area_id, d.kategori, d.nama, d.slug, d.gambar_url, d.deskripsi, 
     d.alamat, d.highlight_text, d.lat, d.lng, a.nama AS kota
 FROM destinasi d
 JOIN master_area a ON d.area_id = a.id
