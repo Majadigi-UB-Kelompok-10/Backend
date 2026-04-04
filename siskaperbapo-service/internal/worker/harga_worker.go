@@ -44,7 +44,7 @@ func (p *HargaWorkerPool) worker(id int) {
     for job := range p.jobs {
         func() {
             ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-            defer cancel() // ← selalu bersih meski panic
+            defer cancel() 
 
             _, err := p.queries.CreateHargaHarian(ctx, db.CreateHargaHarianParams{
                 BahanPokokID: job.BahanPokokID,
@@ -60,7 +60,6 @@ func (p *HargaWorkerPool) worker(id int) {
                 return
             }
 
-            // err != nil — retry logic
             if job.Retries < 3 {
                 job.Retries++
                 go func(j HargaJob) {
