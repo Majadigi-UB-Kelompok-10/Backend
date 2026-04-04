@@ -1,0 +1,55 @@
+services:
+  sidita-redis:
+    image: redis:8.6
+    container_name: sidita-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - sidita-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+
+  sidita-db:
+    image: postgres:18-alpine
+    container_name: sidita-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - sidita-postgres-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+
+  sidita-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sidita-api
+    ports:
+      - "3000:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=${ENVIRONMENT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    volumes:
+      - .:/app
+    depends_on:
+      - sidita-db
+      - sidita-redis
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+volumes:
+  sidita-postgres-data:
+  sidita-redis-data:
+
+
