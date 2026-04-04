@@ -1,0 +1,55 @@
+services:
+  siskaperbapo-redis:
+    image: redis:8.6
+    container_name: siskaperbapo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - siskaperbapo-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+
+  siskaperbapo-db:
+    image: postgres:18-alpine
+    container_name: siskaperbapo-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - siskaperbapo-postgres-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+
+  siskaperbapo-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: siskaperbapo-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=${ENVIRONMENT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    volumes:
+      - .:/app
+    depends_on:
+      - siskaperbapo-db
+      - siskaperbapo-redis
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+volumes:
+  siskaperbapo-postgres-data:
+  siskaperbapo-redis-data:
+
+
