@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	// "net/url"
 	"time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
@@ -120,6 +121,11 @@ func (h *DestinasiHandler) ListDestinasi(c fiber.Ctx) error {
 
     page, limit := utils.ValidatePaginationParams(c.Query("page", "1"), c.Query("limit", "10"))
 
+    if page < 1 || limit < 1 || limit > 100 {
+        fmt.Printf("[VALIDATION ERROR] Invalid pagination: page=%d, limit=%d\n", page, limit)
+        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Parameter pagination tidak valid (page dan limit harus positif, limit max 100)"})
+    }
+
     cacheKey := fmt.Sprintf("destinasi:list:search_%s:kat_%s:page_%d:limit_%d", search, kategori, page, limit)
 
     if cachedBytes, ok := cache.GlobalCache.Get(cacheKey); ok {
@@ -171,17 +177,27 @@ func (h *DestinasiHandler) ListDestinasi(c fiber.Ctx) error {
     })
 
     if err := g.Wait(); err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil data destinasi"})
+        fmt.Printf("[DATABASE ERROR] ListDestinasi failed - Search: %s, Kategori: %s, Error: %v\n", search, kategori, err)
+        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil data destinasi dari database"})
     }
 
     if data == nil {
         data = []db.ListDestinasiRow{}
     }
 
+    if len(data) == 0 {
+        fmt.Printf("[INFO] No destinasi found - Search: %s, Kategori: %s\n", search, kategori)
+    }
+
     totalPages := int(math.Ceil(float64(totalData) / float64(limit)))
 
+    pesan := "Berhasil mengambil data destinasi"
+    if totalData == 0 {
+        pesan = "Tidak ada data destinasi yang ditemukan sesuai kriteria pencarian"
+    }
+
     response := BaseResponse{
-        Pesan: "Berhasil mengambil data destinasi",
+        Pesan: pesan,
         Data:  data,
         Meta: struct {
             Page       int   `json:"page"`
@@ -222,8 +238,10 @@ func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
 	destinasiUtama, err := h.Queries.GetDestinasiBySlug(ctx, slug)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
+			fmt.Printf("[INFO] Destinasi not found - Slug: %s\n", slug)
 			return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Destinasi tidak ditemukan!"})
 		}
+		fmt.Printf("[DATABASE ERROR] GetDetailDestinasi failed - Slug: %s, Error: %v\n", slug, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil detail destinasi"})
 	}
 
@@ -232,13 +250,23 @@ func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
 		galeri = []db.ListDestinasiGambarRow{}
 	}
 
+	vLat, _ := destinasiUtama.Lat.Value()
+	vLng, _ := destinasiUtama.Lng.Value()
+
+	gmapsURL := ""
+	if vLat != nil && vLng != nil {
+		gmapsURL = fmt.Sprintf("https://www.google.com/maps/dir/?api=1&destination=%v,%v", vLat, vLng)
+	}
+
 	response := BaseResponse{
 		Pesan: "Berhasil mengambil detail destinasi",
 		Data: struct {
-			Destinasi db.GetDestinasiBySlugRow   `json:"destinasi"`
+			Destinasi db.GetDestinasiBySlugRow    `json:"destinasi"`
+			GmapsURL  string                      `json:"gmaps_url"` 
 			Galeri    []db.ListDestinasiGambarRow `json:"galeri"`
 		}{
 			Destinasi: destinasiUtama,
+			GmapsURL:  gmapsURL, 
 			Galeri:    galeri,
 		},
 	}
@@ -604,12 +632,18 @@ func (h *DestinasiHandler) CacheWarmup() {
 	})
 
 	if err := g.Wait(); err != nil {
-		fmt.Printf("Gagal melakukan Cache Warmup Destinasi: %v\n", err)
+		fmt.Printf("[WARMUP ERROR] Cache warmup destinasi failed: %v\n", err)
 		return
 	}
 
 	if data == nil {
 		data = []db.ListDestinasiRow{}
+	}
+
+	if len(data) == 0 {
+		fmt.Printf("[WARMUP INFO] No destinasi data available for cache warmup\n")
+	} else {
+		fmt.Printf("[WARMUP SUCCESS] Cache warmup destinasi completed with %d records\n", len(data))
 	}
 
 	totalPages := int(math.Ceil(float64(totalData) / 10.0))
@@ -691,6 +725,7 @@ func (h *DestinasiHandler) GetDestinasiMaps(c fiber.Ctx) error {
 
     data, err := h.Queries.ListDestinasiMaps(ctx, arg)
     if err != nil {
+        fmt.Printf("[DATABASE ERROR] GetDestinasiMaps failed - Slug: %s, Search: %s, Error: %v\n", slugQuery, searchQuery, err)
         return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil data peta"})
     }
 

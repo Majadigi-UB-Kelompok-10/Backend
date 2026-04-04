@@ -129,12 +129,16 @@ func main() {
 
 	queries := db.New(pool)
 	destinasiHandler := handlers.NewDestinasiHandler(queries, cld)
-	routes.SetupRoutes(app, destinasiHandler)
+	hotelHandler := handlers.NewHotelHandler(queries, cld)
+	eventHandler := handlers.NewEventHandler(queries, cld)
+	routes.SetupRoutes(app, destinasiHandler, hotelHandler, eventHandler)
 	fmt.Println("Routes configured")
 
 	go func() {
 		time.Sleep(1 * time.Second)
 		destinasiHandler.CacheWarmup()
+		hotelHandler.CacheWarmup()
+		eventHandler.CacheWarmup()
 	}()
 
 	go func() {

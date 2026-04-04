@@ -38,19 +38,12 @@ func (r *RedisCache) Get(key string) (interface{}, bool) {
 	ctx, cancel := r.contextWithTimeout()
 	defer cancel()
 
-	val, err := r.client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	val, err := r.client.Get(ctx, key).Bytes()
+	if err == redis.Nil || err != nil {
 		return nil, false
 	}
-	if err != nil {
-		return nil, false
-	}
-
-	var data interface{}
-	if err := json.Unmarshal([]byte(val), &data); err != nil {
-		return nil, false
-	}
-	return data, true
+	
+	return val, true
 }
 
 func (r *RedisCache) Set(key string, val interface{}, ttl time.Duration) {
@@ -66,22 +59,7 @@ func (r *RedisCache) Set(key string, val interface{}, ttl time.Duration) {
 }
 
 func (r *RedisCache) GetImmutable(key string) (interface{}, bool) {
-	ctx, cancel := r.contextWithTimeout()
-	defer cancel()
-
-	val, err := r.client.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return nil, false
-	}
-	if err != nil {
-		return nil, false
-	}
-
-	var data interface{}
-	if err := json.Unmarshal([]byte(val), &data); err != nil {
-		return nil, false
-	}
-	return data, true
+	return r.Get(key)
 }
 
 func (r *RedisCache) SetImmutable(key string, val interface{}) {
@@ -93,7 +71,7 @@ func (r *RedisCache) SetImmutable(key string, val interface{}) {
 		return
 	}
 
-	r.client.Set(ctx, key, data, 0)
+	r.client.Set(ctx, key, data, 0) 
 }
 
 func (r *RedisCache) InvalidatePattern(pattern string) {

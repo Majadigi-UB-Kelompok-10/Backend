@@ -28,7 +28,9 @@ WHERE
 
 -- name: ListDestinasi :many
 SELECT 
-    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.alamat, a.nama AS kota
+    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.alamat, 
+    d.lat::float8 AS lat, d.lng::float8 AS lng, 
+    a.nama AS kota
 FROM destinasi d
 JOIN master_area a ON d.area_id = a.id
 WHERE 
@@ -89,7 +91,8 @@ RETURNING id;
 
 -- name: ListHotel :many
 SELECT 
-    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, a.nama AS kota
+    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, a.nama AS kota,
+    h.lat::float8 AS lat, h.lng::float8 AS lng
 FROM hotel h
 JOIN master_area a ON h.area_id = a.id
 WHERE 
@@ -98,6 +101,13 @@ WHERE
     AND (sqlc.narg('min_bintang')::smallint IS NULL OR h.bintang >= sqlc.narg('min_bintang')::smallint)
 ORDER BY h.bintang DESC, h.harga_mulai ASC
 LIMIT @limit_data::int OFFSET @offset_data::int;
+
+-- name: ListHotelMaps :many
+SELECT id, nama, slug, bintang, lat, lng, gambar_url
+FROM hotel
+WHERE
+    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int) AND
+    (sqlc.narg('search')::text IS NULL OR nama ILIKE '%' || sqlc.narg('search')::text || '%');
 
 -- name: CountHotel :one
 SELECT COUNT(*) 
@@ -109,8 +119,8 @@ WHERE
 
 -- name: GetHotelBySlug :one
 SELECT 
-    h.id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, 
-    h.deskripsi, h.alamat, h.highlight_text, h.lat, h.lng, a.nama AS kota
+    h.id, h.area_id, h.nama, h.slug, h.harga_mulai, h.bintang, h.gambar_url, 
+    h.deskripsi, h.alamat, h.highlight_text, h.lat::float8 AS lat, h.lng::float8 AS lng, a.nama AS kota
 FROM hotel h
 JOIN master_area a ON h.area_id = a.id
 WHERE h.slug = $1 LIMIT 1;
@@ -122,18 +132,53 @@ INSERT INTO hotel (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING id, created_at;
 
+-- name: GetHotelByID :one
+SELECT * FROM hotel WHERE id = $1 LIMIT 1;
+
+-- name: UpdateHotel :one
+UPDATE hotel
+SET 
+    area_id = $2,
+    nama = $3,
+    slug = $4,
+    harga_mulai = $5,
+    bintang = $6,
+    gambar_url = $7,
+    deskripsi = $8,
+    alamat = $9,
+    highlight_text = $10,
+    lat = $11,
+    lng = $12
+WHERE id = $1
+RETURNING id, nama, slug;
+
+-- name: DeleteHotel :exec
+DELETE FROM hotel WHERE id = $1;
+
 -- name: ListEvent :many
 SELECT 
     e.id, e.nama, e.slug, e.gambar_url, e.tanggal_mulai, e.tanggal_selesai, 
-    e.tahun, e.info_tiket, a.nama AS kota
+    e.tahun, e.info_tiket, e.harga_tiket, a.nama AS kota,
+    e.lat::float8 AS lat, e.lng::float8 AS lng
 FROM event e
 JOIN master_area a ON e.area_id = a.id
 WHERE 
     (sqlc.narg('search')::text IS NULL OR e.nama ILIKE '%' || sqlc.narg('search')::text || '%')
     AND (sqlc.narg('area_id')::int IS NULL OR e.area_id = sqlc.narg('area_id')::int)
     AND (sqlc.narg('tahun')::smallint IS NULL OR e.tahun = sqlc.narg('tahun')::smallint)
+    AND (sqlc.narg('start_date')::date IS NULL OR e.tanggal_mulai >= sqlc.narg('start_date')::date)
+    AND (sqlc.narg('end_date')::date IS NULL OR e.tanggal_mulai < sqlc.narg('end_date')::date)
 ORDER BY e.tanggal_mulai ASC
 LIMIT @limit_data::int OFFSET @offset_data::int;
+
+-- name: ListEventMaps :many
+SELECT 
+    id, nama, slug, tanggal_mulai, gambar_url,
+    lat::float8 AS lat, lng::float8 AS lng
+FROM event
+WHERE
+    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int) AND
+    (sqlc.narg('search')::text IS NULL OR nama ILIKE '%' || sqlc.narg('search')::text || '%');
 
 -- name: CountEvent :one
 SELECT COUNT(*) 
@@ -141,19 +186,45 @@ FROM event e
 WHERE 
     (sqlc.narg('search')::text IS NULL OR e.nama ILIKE '%' || sqlc.narg('search')::text || '%')
     AND (sqlc.narg('area_id')::int IS NULL OR e.area_id = sqlc.narg('area_id')::int)
-    AND (sqlc.narg('tahun')::smallint IS NULL OR e.tahun = sqlc.narg('tahun')::smallint);
+    AND (sqlc.narg('tahun')::smallint IS NULL OR e.tahun = sqlc.narg('tahun')::smallint)
+    AND (sqlc.narg('start_date')::date IS NULL OR e.tanggal_mulai >= sqlc.narg('start_date')::date)
+    AND (sqlc.narg('end_date')::date IS NULL OR e.tanggal_mulai < sqlc.narg('end_date')::date);
 
 -- name: GetEventBySlug :one
 SELECT 
-    e.id, e.nama, e.slug, e.gambar_url, e.deskripsi, e.tanggal_mulai, 
-    e.tanggal_selesai, e.tahun, e.info_tiket, e.lat, e.lng, a.nama AS kota
+    e.id, e.area_id, e.nama, e.slug, e.gambar_url, e.deskripsi, e.tanggal_mulai, 
+    e.tanggal_selesai, e.tahun, e.info_tiket, e.harga_tiket, 
+    e.lat::float8 AS lat, e.lng::float8 AS lng, a.nama AS kota
 FROM event e
 JOIN master_area a ON e.area_id = a.id
 WHERE e.slug = $1 LIMIT 1;
 
+-- name: GetEventByID :one
+SELECT * FROM event WHERE id = $1 LIMIT 1;
+
 -- name: CreateEvent :one
 INSERT INTO event (
-    area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, info_tiket, lat, lng
+    area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, info_tiket, harga_tiket, lat, lng
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING id, created_at;
+
+-- name: UpdateEvent :one
+UPDATE event
+SET 
+    area_id = $2,
+    nama = $3,
+    slug = $4,
+    gambar_url = $5,
+    deskripsi = $6,
+    tanggal_mulai = $7,
+    tanggal_selesai = $8,
+    info_tiket = $9,
+    harga_tiket = $10,
+    lat = $11,
+    lng = $12
+WHERE id = $1
+RETURNING id, nama, slug;
+
+-- name: DeleteEvent :exec
+DELETE FROM event WHERE id = $1;
