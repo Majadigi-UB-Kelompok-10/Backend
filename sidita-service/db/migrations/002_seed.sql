@@ -1,3 +1,6 @@
+-- =====================================================================
+-- 1. SEED MASTER AREA (31 Kota/Kabupaten Jawa Timur Lengkap)
+-- =====================================================================
 INSERT INTO master_area (nama, slug, lat, lng) VALUES 
 ('Surabaya', 'surabaya', -7.250445, 112.768845),
 ('Banyuwangi', 'banyuwangi', -8.219233, 114.369227),
@@ -30,3 +33,72 @@ INSERT INTO master_area (nama, slug, lat, lng) VALUES
 ('Sampang', 'sampang', -7.187200, 113.243800),
 ('Pamekasan', 'pamekasan', -7.161100, 113.480900),
 ('Sumenep', 'sumenep', -7.013500, 113.865800);
+
+
+-- =====================================================================
+-- 2. SEED DESTINASI
+-- =====================================================================
+-- Keterangan: area_id 1 = Surabaya, 2 = Banyuwangi, 3 = Malang
+INSERT INTO destinasi (area_id, kategori, nama, slug, gambar_url, deskripsi, alamat, highlight_text, lat, lng) VALUES 
+(
+    1, 
+    'Taman', 
+    'Taman Bungkul', 
+    'taman-bungkul', 
+    'https://res.cloudinary.com/dlscbkffi/image/upload/v1775289466/sidita_destinasi/q4lz0zlieispbhjl72di.jpg', 
+    'Taman kota yang rindang dengan fasilitas lengkap di pusat Surabaya. Sangat cocok untuk bersantai dan olahraga pagi.', 
+    'Jl. Taman Bungkul, Darmo, Kec. Wonokromo, Surabaya', 
+    'Taman terbaik se-Asia Tenggara 2013', 
+    -7.2913468, 
+    112.7372415
+),
+(
+    2, 
+    'Pegunungan', 
+    'Kawah Ijen', 
+    'kawah-ijen', 
+    'https://res.cloudinary.com/demo/image/upload/kawah-ijen.jpg', 
+    'Gunung berapi aktif yang terkenal dengan fenomena blue fire yang sangat langka di dunia.', 
+    'Perbatasan Kabupaten Banyuwangi dan Bondowoso', 
+    'Fenomena Blue Fire Langka', 
+    -8.0584, 
+    114.2420
+);
+
+
+-- =====================================================================
+-- 3. SEED HOTEL
+-- =====================================================================
+INSERT INTO hotel (area_id, nama, slug, harga_mulai, bintang, gambar_url, deskripsi, alamat, highlight_text, lat, lng) VALUES 
+(
+    1, 
+    'Hotel Majapahit', 
+    'hotel-majapahit', 
+    1500000, 
+    5, 
+    'https://res.cloudinary.com/demo/image/upload/majapahit.jpg', 
+    'Hotel bersejarah dengan arsitektur kolonial yang sangat mewah dan asri.', 
+    'Jl. Tunjungan No.65, Genteng, Surabaya', 
+    'Hotel bersejarah bintang 5 di pusat kota', 
+    -7.2599, 
+    112.7388
+);
+
+
+-- =====================================================================
+-- 4. SEED EVENT
+-- =====================================================================
+INSERT INTO event (area_id, nama, slug, gambar_url, deskripsi, tanggal_mulai, tanggal_selesai, info_tiket, harga_tiket, lat, lng) VALUES 
+(
+    1, 
+    'Surabaya Vaganza 2026', 
+    'surabaya-vaganza-2026', 
+    'https://res.cloudinary.com/dlscbkffi/image/upload/v1775320497/sidita_event/mbspiaqoiwkaq9mih3jy.jpg', 
+    'Pawai bunga dan budaya yang sangat meriah untuk menyambut Hari Ulang Tahun (HUT) Kota Surabaya.', 
+    '2026-05-26', 
+    '2026-05-26', 
+    'Gratis untuk Umum', 
+    0, 
+    -7.2625, 
+    112.7425
+);
