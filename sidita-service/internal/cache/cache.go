@@ -1,31 +1,29 @@
 package cache
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 )
 
-// Cache interface sekarang jauh lebih sederhana karena semuanya Immutable
 type Cache interface {
-	Get(key string) (interface{}, bool)
-	Set(key string, val interface{})
-	InvalidatePattern(pattern string)
-	DeleteByPrefix(prefix string)
-	Delete(key string)
+	Get(key string) ([]byte, bool)
+    Set(key string, val interface{})
+    InvalidatePattern(pattern string)
+    DeleteByPrefix(prefix string)
+    Delete(key string)
 }
 
 type SimpleCache struct {
-	mu    sync.RWMutex
-	// Langsung menyimpan data tanpa perlu struct CacheEntry (karena tidak ada ExpiresAt)
-	store map[string]interface{} 
+    mu    sync.RWMutex
+    store map[string][]byte 
 }
 
-// GlobalCache default menggunakan Memory Cache sebelum Redis terkoneksi di main.go
 var GlobalCache Cache = &SimpleCache{
-	store: make(map[string]interface{}),
+	store: make(map[string][]byte),
 }
 
-func (c *SimpleCache) Get(key string) (interface{}, bool) {
+func (c *SimpleCache) Get(key string) ([]byte, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	data, ok := c.store[key]
@@ -35,7 +33,14 @@ func (c *SimpleCache) Get(key string) (interface{}, bool) {
 func (c *SimpleCache) Set(key string, val interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.store[key] = val
+	switch v := val.(type) {
+	case []byte:
+		c.store[key] = v
+	default:
+		if jsonData, err := json.Marshal(val); err == nil {
+			c.store[key] = jsonData
+		}
+	}
 }
 
 func (c *SimpleCache) DeleteByPrefix(prefix string) {
