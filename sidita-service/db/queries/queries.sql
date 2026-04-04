@@ -1,17 +1,28 @@
 -- name: GetAllArea :many
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 ORDER BY nama ASC;
 
 -- name: GetAreaBySlug :one
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 WHERE slug = $1 LIMIT 1;
 
 -- name: GetAreaByName :one
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 WHERE nama ILIKE $1 LIMIT 1;
+
+-- name: GetDestinasiByID :one
+SELECT * FROM destinasi WHERE id = $1 LIMIT 1;
+
+-- name: GetAreaByID :one
+SELECT * FROM master_area WHERE id = $1 LIMIT 1;
+
+-- name: ListDestinasiMaps :many
+SELECT id, nama, slug, kategori, lat, lng 
+FROM destinasi
+WHERE (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int);
 
 -- name: ListDestinasi :many
 SELECT 
