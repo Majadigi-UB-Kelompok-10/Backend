@@ -46,7 +46,7 @@ func Load() *Config {
 	}
 
 	if cfg.DatabaseURL == "" {
-		log.Fatal("❌ DATABASE_URL tidak ditemukan di .env file")
+		log.Fatal("DATABASE_URL tidak ditemukan di .env file")
 	}
 	if cfg.Port == "" {
 		cfg.Port = ":8080"
