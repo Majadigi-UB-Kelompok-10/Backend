@@ -50,7 +50,6 @@ func ValidatePaginationParams(pageStr, limitStr string) (page int, limit int) {
 		limit = l
 	}
 
-	// Enforce limits
 	if limit > 50 {
 		limit = 50
 	}
