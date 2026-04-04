@@ -58,6 +58,7 @@ CREATE TABLE event (
     tanggal_selesai DATE NOT NULL,
     tahun SMALLINT GENERATED ALWAYS AS (EXTRACT(YEAR FROM tanggal_mulai)::SMALLINT) STORED,
     info_tiket VARCHAR(100) DEFAULT 'Gratis Umum',
+    harga_tiket INTEGER DEFAULT 0,
     lat DECIMAL(10, 8),
     lng DECIMAL(11, 8),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
