@@ -23,9 +23,9 @@ WHERE
 `
 
 type CountDestinasiParams struct {
-	Search   pgtype.Text
-	Kategori pgtype.Text
-	AreaID   pgtype.Int4
+	Search   pgtype.Text `json:"search"`
+	Kategori pgtype.Text `json:"kategori"`
+	AreaID   pgtype.Int4 `json:"area_id"`
 }
 
 func (q *Queries) CountDestinasi(ctx context.Context, arg CountDestinasiParams) (int64, error) {
@@ -45,9 +45,9 @@ WHERE
 `
 
 type CountEventParams struct {
-	Search pgtype.Text
-	AreaID pgtype.Int4
-	Tahun  pgtype.Int2
+	Search pgtype.Text `json:"search"`
+	AreaID pgtype.Int4 `json:"area_id"`
+	Tahun  pgtype.Int2 `json:"tahun"`
 }
 
 func (q *Queries) CountEvent(ctx context.Context, arg CountEventParams) (int64, error) {
@@ -67,9 +67,9 @@ WHERE
 `
 
 type CountHotelParams struct {
-	Search     pgtype.Text
-	AreaID     pgtype.Int4
-	MinBintang pgtype.Int2
+	Search     pgtype.Text `json:"search"`
+	AreaID     pgtype.Int4 `json:"area_id"`
+	MinBintang pgtype.Int2 `json:"min_bintang"`
 }
 
 func (q *Queries) CountHotel(ctx context.Context, arg CountHotelParams) (int64, error) {
@@ -88,21 +88,21 @@ INSERT INTO destinasi (
 `
 
 type CreateDestinasiParams struct {
-	AreaID        int32
-	Kategori      string
-	Nama          string
-	Slug          string
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText string
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
+	AreaID        int32          `json:"area_id"`
+	Kategori      string         `json:"kategori"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText string         `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
 }
 
 type CreateDestinasiRow struct {
-	ID        int32
-	CreatedAt pgtype.Timestamptz
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateDestinasi(ctx context.Context, arg CreateDestinasiParams) (CreateDestinasiRow, error) {
@@ -130,9 +130,9 @@ RETURNING id
 `
 
 type CreateDestinasiGambarParams struct {
-	DestinasiID int32
-	GambarUrl   string
-	Urutan      pgtype.Int4
+	DestinasiID int32       `json:"destinasi_id"`
+	GambarUrl   string      `json:"gambar_url"`
+	Urutan      pgtype.Int4 `json:"urutan"`
 }
 
 func (q *Queries) CreateDestinasiGambar(ctx context.Context, arg CreateDestinasiGambarParams) (int32, error) {
@@ -151,21 +151,21 @@ INSERT INTO event (
 `
 
 type CreateEventParams struct {
-	AreaID         int32
-	Nama           string
-	Slug           string
-	GambarUrl      string
-	Deskripsi      string
-	TanggalMulai   pgtype.Date
-	TanggalSelesai pgtype.Date
-	InfoTiket      pgtype.Text
-	Lat            pgtype.Numeric
-	Lng            pgtype.Numeric
+	AreaID         int32          `json:"area_id"`
+	Nama           string         `json:"nama"`
+	Slug           string         `json:"slug"`
+	GambarUrl      string         `json:"gambar_url"`
+	Deskripsi      string         `json:"deskripsi"`
+	TanggalMulai   pgtype.Date    `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date    `json:"tanggal_selesai"`
+	InfoTiket      pgtype.Text    `json:"info_tiket"`
+	Lat            pgtype.Numeric `json:"lat"`
+	Lng            pgtype.Numeric `json:"lng"`
 }
 
 type CreateEventRow struct {
-	ID        int32
-	CreatedAt pgtype.Timestamptz
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (CreateEventRow, error) {
@@ -195,22 +195,22 @@ INSERT INTO hotel (
 `
 
 type CreateHotelParams struct {
-	AreaID        int32
-	Nama          string
-	Slug          string
-	HargaMulai    pgtype.Int4
-	Bintang       pgtype.Int2
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText pgtype.Text
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
+	AreaID        int32          `json:"area_id"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	HargaMulai    pgtype.Int4    `json:"harga_mulai"`
+	Bintang       pgtype.Int2    `json:"bintang"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText pgtype.Text    `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
 }
 
 type CreateHotelRow struct {
-	ID        int32
-	CreatedAt pgtype.Timestamptz
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateHotel(ctx context.Context, arg CreateHotelParams) (CreateHotelRow, error) {
@@ -242,7 +242,7 @@ func (q *Queries) DeleteDestinasi(ctx context.Context, id int32) error {
 }
 
 const getAllArea = `-- name: GetAllArea :many
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 ORDER BY nama ASC
 `
@@ -256,7 +256,13 @@ func (q *Queries) GetAllArea(ctx context.Context) ([]MasterArea, error) {
 	var items []MasterArea
 	for rows.Next() {
 		var i MasterArea
-		if err := rows.Scan(&i.ID, &i.Nama, &i.Slug); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Slug,
+			&i.Lat,
+			&i.Lng,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -267,8 +273,25 @@ func (q *Queries) GetAllArea(ctx context.Context) ([]MasterArea, error) {
 	return items, nil
 }
 
+const getAreaByID = `-- name: GetAreaByID :one
+SELECT id, nama, slug, lat, lng FROM master_area WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetAreaByID(ctx context.Context, id int32) (MasterArea, error) {
+	row := q.db.QueryRow(ctx, getAreaByID, id)
+	var i MasterArea
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Slug,
+		&i.Lat,
+		&i.Lng,
+	)
+	return i, err
+}
+
 const getAreaByName = `-- name: GetAreaByName :one
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 WHERE nama ILIKE $1 LIMIT 1
 `
@@ -276,12 +299,18 @@ WHERE nama ILIKE $1 LIMIT 1
 func (q *Queries) GetAreaByName(ctx context.Context, nama string) (MasterArea, error) {
 	row := q.db.QueryRow(ctx, getAreaByName, nama)
 	var i MasterArea
-	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Slug,
+		&i.Lat,
+		&i.Lng,
+	)
 	return i, err
 }
 
 const getAreaBySlug = `-- name: GetAreaBySlug :one
-SELECT id, nama, slug 
+SELECT id, nama, slug, lat, lng 
 FROM master_area 
 WHERE slug = $1 LIMIT 1
 `
@@ -289,7 +318,37 @@ WHERE slug = $1 LIMIT 1
 func (q *Queries) GetAreaBySlug(ctx context.Context, slug string) (MasterArea, error) {
 	row := q.db.QueryRow(ctx, getAreaBySlug, slug)
 	var i MasterArea
-	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Slug,
+		&i.Lat,
+		&i.Lng,
+	)
+	return i, err
+}
+
+const getDestinasiByID = `-- name: GetDestinasiByID :one
+SELECT id, area_id, kategori, nama, slug, gambar_url, deskripsi, alamat, highlight_text, lat, lng, created_at FROM destinasi WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetDestinasiByID(ctx context.Context, id int32) (Destinasi, error) {
+	row := q.db.QueryRow(ctx, getDestinasiByID, id)
+	var i Destinasi
+	err := row.Scan(
+		&i.ID,
+		&i.AreaID,
+		&i.Kategori,
+		&i.Nama,
+		&i.Slug,
+		&i.GambarUrl,
+		&i.Deskripsi,
+		&i.Alamat,
+		&i.HighlightText,
+		&i.Lat,
+		&i.Lng,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
@@ -303,17 +362,17 @@ WHERE d.slug = $1 LIMIT 1
 `
 
 type GetDestinasiBySlugRow struct {
-	ID            int32
-	Kategori      string
-	Nama          string
-	Slug          string
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText string
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
-	Kota          string
+	ID            int32          `json:"id"`
+	Kategori      string         `json:"kategori"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText string         `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
+	Kota          string         `json:"kota"`
 }
 
 func (q *Queries) GetDestinasiBySlug(ctx context.Context, slug string) (GetDestinasiBySlugRow, error) {
@@ -345,18 +404,18 @@ WHERE e.slug = $1 LIMIT 1
 `
 
 type GetEventBySlugRow struct {
-	ID             int32
-	Nama           string
-	Slug           string
-	GambarUrl      string
-	Deskripsi      string
-	TanggalMulai   pgtype.Date
-	TanggalSelesai pgtype.Date
-	Tahun          pgtype.Int2
-	InfoTiket      pgtype.Text
-	Lat            pgtype.Numeric
-	Lng            pgtype.Numeric
-	Kota           string
+	ID             int32          `json:"id"`
+	Nama           string         `json:"nama"`
+	Slug           string         `json:"slug"`
+	GambarUrl      string         `json:"gambar_url"`
+	Deskripsi      string         `json:"deskripsi"`
+	TanggalMulai   pgtype.Date    `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date    `json:"tanggal_selesai"`
+	Tahun          pgtype.Int2    `json:"tahun"`
+	InfoTiket      pgtype.Text    `json:"info_tiket"`
+	Lat            pgtype.Numeric `json:"lat"`
+	Lng            pgtype.Numeric `json:"lng"`
+	Kota           string         `json:"kota"`
 }
 
 func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (GetEventBySlugRow, error) {
@@ -389,18 +448,18 @@ WHERE h.slug = $1 LIMIT 1
 `
 
 type GetHotelBySlugRow struct {
-	ID            int32
-	Nama          string
-	Slug          string
-	HargaMulai    pgtype.Int4
-	Bintang       pgtype.Int2
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText pgtype.Text
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
-	Kota          string
+	ID            int32          `json:"id"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	HargaMulai    pgtype.Int4    `json:"harga_mulai"`
+	Bintang       pgtype.Int2    `json:"bintang"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText pgtype.Text    `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
+	Kota          string         `json:"kota"`
 }
 
 func (q *Queries) GetHotelBySlug(ctx context.Context, slug string) (GetHotelBySlugRow, error) {
@@ -439,21 +498,21 @@ LIMIT $5::int OFFSET $4::int
 `
 
 type ListDestinasiParams struct {
-	Search     pgtype.Text
-	Kategori   pgtype.Text
-	AreaID     pgtype.Int4
-	OffsetData int32
-	LimitData  int32
+	Search     pgtype.Text `json:"search"`
+	Kategori   pgtype.Text `json:"kategori"`
+	AreaID     pgtype.Int4 `json:"area_id"`
+	OffsetData int32       `json:"offset_data"`
+	LimitData  int32       `json:"limit_data"`
 }
 
 type ListDestinasiRow struct {
-	ID        int32
-	Kategori  string
-	Nama      string
-	Slug      string
-	GambarUrl string
-	Alamat    string
-	Kota      string
+	ID        int32  `json:"id"`
+	Kategori  string `json:"kategori"`
+	Nama      string `json:"nama"`
+	Slug      string `json:"slug"`
+	GambarUrl string `json:"gambar_url"`
+	Alamat    string `json:"alamat"`
+	Kota      string `json:"kota"`
 }
 
 func (q *Queries) ListDestinasi(ctx context.Context, arg ListDestinasiParams) ([]ListDestinasiRow, error) {
@@ -498,9 +557,9 @@ ORDER BY urutan ASC
 `
 
 type ListDestinasiGambarRow struct {
-	ID        int32
-	GambarUrl string
-	Urutan    pgtype.Int4
+	ID        int32       `json:"id"`
+	GambarUrl string      `json:"gambar_url"`
+	Urutan    pgtype.Int4 `json:"urutan"`
 }
 
 func (q *Queries) ListDestinasiGambar(ctx context.Context, destinasiID int32) ([]ListDestinasiGambarRow, error) {
@@ -513,6 +572,48 @@ func (q *Queries) ListDestinasiGambar(ctx context.Context, destinasiID int32) ([
 	for rows.Next() {
 		var i ListDestinasiGambarRow
 		if err := rows.Scan(&i.ID, &i.GambarUrl, &i.Urutan); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDestinasiMaps = `-- name: ListDestinasiMaps :many
+SELECT id, nama, slug, kategori, lat, lng 
+FROM destinasi
+WHERE ($1::int IS NULL OR area_id = $1::int)
+`
+
+type ListDestinasiMapsRow struct {
+	ID       int32          `json:"id"`
+	Nama     string         `json:"nama"`
+	Slug     string         `json:"slug"`
+	Kategori string         `json:"kategori"`
+	Lat      pgtype.Numeric `json:"lat"`
+	Lng      pgtype.Numeric `json:"lng"`
+}
+
+func (q *Queries) ListDestinasiMaps(ctx context.Context, areaID pgtype.Int4) ([]ListDestinasiMapsRow, error) {
+	rows, err := q.db.Query(ctx, listDestinasiMaps, areaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDestinasiMapsRow
+	for rows.Next() {
+		var i ListDestinasiMapsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Slug,
+			&i.Kategori,
+			&i.Lat,
+			&i.Lng,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -538,23 +639,23 @@ LIMIT $5::int OFFSET $4::int
 `
 
 type ListEventParams struct {
-	Search     pgtype.Text
-	AreaID     pgtype.Int4
-	Tahun      pgtype.Int2
-	OffsetData int32
-	LimitData  int32
+	Search     pgtype.Text `json:"search"`
+	AreaID     pgtype.Int4 `json:"area_id"`
+	Tahun      pgtype.Int2 `json:"tahun"`
+	OffsetData int32       `json:"offset_data"`
+	LimitData  int32       `json:"limit_data"`
 }
 
 type ListEventRow struct {
-	ID             int32
-	Nama           string
-	Slug           string
-	GambarUrl      string
-	TanggalMulai   pgtype.Date
-	TanggalSelesai pgtype.Date
-	Tahun          pgtype.Int2
-	InfoTiket      pgtype.Text
-	Kota           string
+	ID             int32       `json:"id"`
+	Nama           string      `json:"nama"`
+	Slug           string      `json:"slug"`
+	GambarUrl      string      `json:"gambar_url"`
+	TanggalMulai   pgtype.Date `json:"tanggal_mulai"`
+	TanggalSelesai pgtype.Date `json:"tanggal_selesai"`
+	Tahun          pgtype.Int2 `json:"tahun"`
+	InfoTiket      pgtype.Text `json:"info_tiket"`
+	Kota           string      `json:"kota"`
 }
 
 func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]ListEventRow, error) {
@@ -607,21 +708,21 @@ LIMIT $5::int OFFSET $4::int
 `
 
 type ListHotelParams struct {
-	Search     pgtype.Text
-	AreaID     pgtype.Int4
-	MinBintang pgtype.Int2
-	OffsetData int32
-	LimitData  int32
+	Search     pgtype.Text `json:"search"`
+	AreaID     pgtype.Int4 `json:"area_id"`
+	MinBintang pgtype.Int2 `json:"min_bintang"`
+	OffsetData int32       `json:"offset_data"`
+	LimitData  int32       `json:"limit_data"`
 }
 
 type ListHotelRow struct {
-	ID         int32
-	Nama       string
-	Slug       string
-	HargaMulai pgtype.Int4
-	Bintang    pgtype.Int2
-	GambarUrl  string
-	Kota       string
+	ID         int32       `json:"id"`
+	Nama       string      `json:"nama"`
+	Slug       string      `json:"slug"`
+	HargaMulai pgtype.Int4 `json:"harga_mulai"`
+	Bintang    pgtype.Int2 `json:"bintang"`
+	GambarUrl  string      `json:"gambar_url"`
+	Kota       string      `json:"kota"`
 }
 
 func (q *Queries) ListHotel(ctx context.Context, arg ListHotelParams) ([]ListHotelRow, error) {
@@ -668,23 +769,23 @@ RETURNING id, nama, slug
 `
 
 type UpdateDestinasiParams struct {
-	ID            int32
-	AreaID        int32
-	Kategori      string
-	Nama          string
-	Slug          string
-	GambarUrl     string
-	Deskripsi     string
-	Alamat        string
-	HighlightText string
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
+	ID            int32          `json:"id"`
+	AreaID        int32          `json:"area_id"`
+	Kategori      string         `json:"kategori"`
+	Nama          string         `json:"nama"`
+	Slug          string         `json:"slug"`
+	GambarUrl     string         `json:"gambar_url"`
+	Deskripsi     string         `json:"deskripsi"`
+	Alamat        string         `json:"alamat"`
+	HighlightText string         `json:"highlight_text"`
+	Lat           pgtype.Numeric `json:"lat"`
+	Lng           pgtype.Numeric `json:"lng"`
 }
 
 type UpdateDestinasiRow struct {
-	ID   int32
-	Nama string
-	Slug string
+	ID   int32  `json:"id"`
+	Nama string `json:"nama"`
+	Slug string `json:"slug"`
 }
 
 func (q *Queries) UpdateDestinasi(ctx context.Context, arg UpdateDestinasiParams) (UpdateDestinasiRow, error) {
