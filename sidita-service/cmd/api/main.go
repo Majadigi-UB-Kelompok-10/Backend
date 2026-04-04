@@ -19,8 +19,9 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/farildzaky/sidita-service/internal/db"
+
 	"github.com/farildzaky/sidita-service/internal/cache"
+	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/handlers"
 	"github.com/farildzaky/sidita-service/internal/routes"
 )
@@ -36,7 +37,7 @@ func initializeCache() {
 		cache.GlobalCache = redisCache
 		fmt.Println("Redis cache initialized")
 	} else {
-		fmt.Println("Using SimpleCache (in-memory)")
+		fmt.Println("Using SimpleCache (in-memory) - Redis URL not found")
 	}
 }
 
@@ -65,13 +66,18 @@ func maskSensitiveData(msg string) string {
 func main() {
 	errEnv := godotenv.Load()
 	if errEnv != nil {
-		log.Println("⚠️ File .env tidak ditemukan, menggunakan system environment variables")
+		log.Println("File .env tidak ditemukan, menggunakan system environment variables")
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	config, errConf := pgxpool.ParseConfig(dbURL)
 	if errConf != nil {
-		log.Fatalf("❌ Gagal parse config DB: %s\n", maskSensitiveData(errConf.Error()))
+		log.Fatalf("Gagal parse config DB: %s\n", maskSensitiveData(errConf.Error()))
 	}
 
 	config.MaxConns = 20
@@ -100,7 +106,6 @@ func main() {
 	})
 
 	app.Use(logger.New())
-
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     getAllowedOrigins(),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -118,57 +123,52 @@ func main() {
 		Max:        100,
 		Expiration: 1 * time.Minute,
 		LimitReached: func(c fiber.Ctx) error {
-			return c.Status(429).JSON(fiber.Map{"error": "Too Many Requests. Santai dulu bossku!"})
+			return c.Status(429).JSON(fiber.Map{"error": "Too Many Requests"})
 		},
 	}))
 
 	queries := db.New(pool)
 	destinasiHandler := handlers.NewDestinasiHandler(queries, cld)
-
 	routes.SetupRoutes(app, destinasiHandler)
 	fmt.Println("Routes configured")
 
-	// 9. Jalankan Server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000" // Port default Sidita
-	}
+	go func() {
+		time.Sleep(1 * time.Second)
+		destinasiHandler.CacheWarmup()
+	}()
 
 	go func() {
+		fmt.Printf("Server Sidita listening on port :%s\n", port)
 		if err := app.Listen(":" + port); err != nil && err.Error() != "shutting down" {
 			log.Printf("Server error: %v\n", err)
 		}
 	}()
-	fmt.Printf("Server Sidita listening on port %s\n", port)
 
-	// =====================================================================
-	// 10. GRACEFUL SHUTDOWN
-	// =====================================================================
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
+	<-quit 
 
-	fmt.Println("\nShutdown signal received, starting graceful shutdown...") 
+	fmt.Println("\nShutdown signal received, starting graceful shutdown...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	fmt.Println("🔄 Shutting down HTTP server...")
+	fmt.Println("Shutting down HTTP server...")
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
 		log.Printf("HTTP server shutdown error: %v\n", err)
+	} else {
+		fmt.Println("HTTP server shutdown complete")
 	}
-	fmt.Println("HTTP server shutdown complete")
 
 	fmt.Println("Closing database connections...")
 	pool.Close()
 	fmt.Println("Database connections closed")
 
-	// Optional: Close Redis Connection jika menggunakan RedisCache
 	if redisCache, ok := cache.GlobalCache.(*cache.RedisCache); ok {
 		fmt.Println("Closing Redis connection...")
 		redisCache.Close()
 		fmt.Println("Redis connection closed")
 	}
 
-	fmt.Println("Graceful shutdown complete. Bye bossku!")
+	fmt.Println("Graceful shutdown complete")
 }
