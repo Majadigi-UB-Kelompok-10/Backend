@@ -354,7 +354,7 @@ func (q *Queries) GetDestinasiByID(ctx context.Context, id int32) (Destinasi, er
 
 const getDestinasiBySlug = `-- name: GetDestinasiBySlug :one
 SELECT 
-    d.id, d.kategori, d.nama, d.slug, d.gambar_url, d.deskripsi, 
+    d.id, d.area_id, d.kategori, d.nama, d.slug, d.gambar_url, d.deskripsi, 
     d.alamat, d.highlight_text, d.lat, d.lng, a.nama AS kota
 FROM destinasi d
 JOIN master_area a ON d.area_id = a.id
@@ -363,6 +363,7 @@ WHERE d.slug = $1 LIMIT 1
 
 type GetDestinasiBySlugRow struct {
 	ID            int32          `json:"id"`
+	AreaID        int32          `json:"area_id"`
 	Kategori      string         `json:"kategori"`
 	Nama          string         `json:"nama"`
 	Slug          string         `json:"slug"`
@@ -380,6 +381,7 @@ func (q *Queries) GetDestinasiBySlug(ctx context.Context, slug string) (GetDesti
 	var i GetDestinasiBySlugRow
 	err := row.Scan(
 		&i.ID,
+		&i.AreaID,
 		&i.Kategori,
 		&i.Nama,
 		&i.Slug,
@@ -583,22 +585,30 @@ func (q *Queries) ListDestinasiGambar(ctx context.Context, destinasiID int32) ([
 }
 
 const listDestinasiMaps = `-- name: ListDestinasiMaps :many
-SELECT id, nama, slug, kategori, lat, lng 
+SELECT id, nama, slug, kategori, lat, lng, gambar_url
 FROM destinasi
-WHERE ($1::int IS NULL OR area_id = $1::int)
+WHERE
+    ($1::int IS NULL OR area_id = $1::int) AND
+    ($2::text IS NULL OR nama ILIKE '%' || $2::text || '%')
 `
 
-type ListDestinasiMapsRow struct {
-	ID       int32          `json:"id"`
-	Nama     string         `json:"nama"`
-	Slug     string         `json:"slug"`
-	Kategori string         `json:"kategori"`
-	Lat      pgtype.Numeric `json:"lat"`
-	Lng      pgtype.Numeric `json:"lng"`
+type ListDestinasiMapsParams struct {
+	AreaID pgtype.Int4 `json:"area_id"`
+	Search pgtype.Text `json:"search"`
 }
 
-func (q *Queries) ListDestinasiMaps(ctx context.Context, areaID pgtype.Int4) ([]ListDestinasiMapsRow, error) {
-	rows, err := q.db.Query(ctx, listDestinasiMaps, areaID)
+type ListDestinasiMapsRow struct {
+	ID        int32          `json:"id"`
+	Nama      string         `json:"nama"`
+	Slug      string         `json:"slug"`
+	Kategori  string         `json:"kategori"`
+	Lat       pgtype.Numeric `json:"lat"`
+	Lng       pgtype.Numeric `json:"lng"`
+	GambarUrl string         `json:"gambar_url"`
+}
+
+func (q *Queries) ListDestinasiMaps(ctx context.Context, arg ListDestinasiMapsParams) ([]ListDestinasiMapsRow, error) {
+	rows, err := q.db.Query(ctx, listDestinasiMaps, arg.AreaID, arg.Search)
 	if err != nil {
 		return nil, err
 	}
@@ -613,6 +623,7 @@ func (q *Queries) ListDestinasiMaps(ctx context.Context, areaID pgtype.Int4) ([]
 			&i.Kategori,
 			&i.Lat,
 			&i.Lng,
+			&i.GambarUrl,
 		); err != nil {
 			return nil, err
 		}
