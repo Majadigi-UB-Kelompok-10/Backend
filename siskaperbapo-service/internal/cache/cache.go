@@ -1,9 +1,11 @@
 package cache
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
+
 )
 
 type Cache interface {
@@ -17,7 +19,7 @@ type Cache interface {
 }
 
 type CacheEntry struct {
-	Data      interface{}
+	Data      []byte 
 	ExpiresAt time.Time
 }
 
@@ -32,7 +34,7 @@ var GlobalCache Cache = &SimpleCache{
 
 func init() {
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute) 
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			if simpleCache, ok := GlobalCache.(*SimpleCache); ok {
@@ -48,7 +50,7 @@ func (c *SimpleCache) cleanup() {
 	now := time.Now()
 	for key, entry := range c.store {
 		if now.After(entry.ExpiresAt) {
-			delete(c.store, key) 
+			delete(c.store, key)
 		}
 	}
 }
@@ -60,14 +62,15 @@ func (c *SimpleCache) Get(key string) (interface{}, bool) {
 	if !ok || time.Now().After(entry.ExpiresAt) {
 		return nil, false
 	}
-	return entry.Data, true
+	return entry.Data, true 
 }
 
 func (c *SimpleCache) Set(key string, val interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	dataBytes, _ := json.Marshal(val)
 	c.store[key] = CacheEntry{
-		Data:      val,
+		Data:      dataBytes,
 		ExpiresAt: time.Now().Add(ttl),
 	}
 }
@@ -83,28 +86,23 @@ func (c *SimpleCache) DeleteByPrefix(prefix string) {
 }
 
 func (c *SimpleCache) Delete(key string) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    delete(c.store, key)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.store, key)
 }
 
 func (c *SimpleCache) SetImmutable(key string, val interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	dataBytes, _ := json.Marshal(val)
 	c.store[key] = CacheEntry{
-		Data:      val,
+		Data:      dataBytes,
 		ExpiresAt: time.Unix(1<<63-1, 0),
 	}
 }
 
 func (c *SimpleCache) GetImmutable(key string) (interface{}, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	entry, ok := c.store[key]
-	if !ok {
-		return nil, false
-	}
-	return entry.Data, true
+	return c.Get(key)
 }
 
 func (c *SimpleCache) InvalidatePattern(pattern string) {
