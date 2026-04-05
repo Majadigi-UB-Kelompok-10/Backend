@@ -3,37 +3,52 @@ SELECT
     plat_nomor_display, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan, cetak_stnk, cetak_tnkb
 FROM kendaraan_pajak
-WHERE plat_nomor = UPPER(REPLACE($1, ' ', ''))
-AND RIGHT(nomor_rangka, 5) = UPPER($2);
+WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', ''))
+AND RIGHT(nomor_rangka, 5) = UPPER(sqlc.arg('lima_digit_rangka')::text);
 
--- name: UpsertKendaraanPajak :one
+-- name: CreateKendaraanPajak :one
 INSERT INTO kendaraan_pajak (
     plat_nomor, plat_nomor_display, nomor_rangka, status_aktif,
     merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan,
     cetak_stnk, cetak_tnkb
 ) VALUES (
-    UPPER(REPLACE($1, ' ', '')), $2, $3, $4,
-    $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16
-)
-ON CONFLICT (plat_nomor) DO UPDATE SET
-    nomor_rangka        = EXCLUDED.nomor_rangka,
-    status_aktif        = EXCLUDED.status_aktif,
-    merk                = EXCLUDED.merk,
-    tipe                = EXCLUDED.tipe,
-    warna               = EXCLUDED.warna,
-    tahun_buat          = EXCLUDED.tahun_buat,
-    model               = EXCLUDED.model,
-    masa_pajak          = EXCLUDED.masa_pajak,
-    pkb_pokok           = EXCLUDED.pkb_pokok,
-    opsen_pkb           = EXCLUDED.opsen_pkb,
-    swdkllj             = EXCLUDED.swdkllj,
-    parkir_berlangganan = EXCLUDED.parkir_berlangganan,
-    cetak_stnk          = EXCLUDED.cetak_stnk,
-    cetak_tnkb          = EXCLUDED.cetak_tnkb,
+    UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', '')),
+    sqlc.arg('plat_nomor_display'),
+    sqlc.arg('nomor_rangka'),
+    sqlc.arg('status_aktif'),
+    sqlc.arg('merk'),
+    sqlc.arg('tipe'),
+    sqlc.arg('warna'),
+    sqlc.arg('tahun_buat'),
+    sqlc.arg('model'),
+    sqlc.arg('masa_pajak'),
+    sqlc.arg('pkb_pokok'),
+    sqlc.arg('opsen_pkb'),
+    sqlc.arg('swdkllj'),
+    sqlc.arg('parkir_berlangganan'),
+    sqlc.arg('cetak_stnk'),
+    sqlc.arg('cetak_tnkb')
+) RETURNING plat_nomor;
+
+-- name: UpdateKendaraanPajak :exec
+UPDATE kendaraan_pajak SET
+    nomor_rangka        = sqlc.arg('nomor_rangka'),
+    status_aktif        = sqlc.arg('status_aktif'),
+    merk                = sqlc.arg('merk'),
+    tipe                = sqlc.arg('tipe'),
+    warna               = sqlc.arg('warna'),
+    tahun_buat          = sqlc.arg('tahun_buat'),
+    model               = sqlc.arg('model'),
+    masa_pajak          = sqlc.arg('masa_pajak'),
+    pkb_pokok           = sqlc.arg('pkb_pokok'),
+    opsen_pkb           = sqlc.arg('opsen_pkb'),
+    swdkllj             = sqlc.arg('swdkllj'),
+    parkir_berlangganan = sqlc.arg('parkir_berlangganan'),
+    cetak_stnk          = sqlc.arg('cetak_stnk'),
+    cetak_tnkb          = sqlc.arg('cetak_tnkb'),
     updated_at          = CURRENT_TIMESTAMP
-RETURNING plat_nomor;
+WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor_key')::text, ' ', ''));
 
 -- name: GetAllTarifPKB :many
 SELECT jenis_plat, label, tarif_pkb_persen, opsen_pkb_persen,
@@ -59,17 +74,56 @@ SELECT DISTINCT tahun FROM master_njkb WHERE jenis_kendaraan = $1 AND merk = $2 
 -- name: GetNilaiJual :one
 SELECT id, nilai_jual
 FROM master_njkb
-WHERE jenis_kendaraan = $1 AND merk = $2 AND model = $3 AND tipe = $4 AND tahun = $5
+WHERE jenis_kendaraan = sqlc.arg('jenis') 
+  AND merk = sqlc.arg('merk') 
+  AND model = sqlc.arg('model') 
+  AND tipe = sqlc.arg('tipe') 
+  AND tahun = sqlc.arg('tahun')
 LIMIT 1;
 
--- name: UpsertMasterNjkb :one
+-- name: CreateMasterNjkb :one
 INSERT INTO master_njkb (
     jenis_kendaraan, merk, model, tipe, tahun, nilai_jual
-) VALUES (
-    $1, $2, $3, $4, $5, $6
-)
-ON CONFLICT (merk, tipe, tahun) DO UPDATE SET
-    jenis_kendaraan = EXCLUDED.jenis_kendaraan,
-    model           = EXCLUDED.model,
-    nilai_jual      = EXCLUDED.nilai_jual
+) VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id;
+
+-- name: UpdateMasterNjkb :exec
+UPDATE master_njkb SET
+    jenis_kendaraan = $2,
+    merk            = $3,
+    model           = $4,
+    tipe            = $5,
+    tahun           = $6,
+    nilai_jual      = $7
+WHERE id = $1;
+
+-- name: DeleteKendaraanPajak :exec
+DELETE FROM kendaraan_pajak WHERE plat_nomor = $1;
+
+-- name: DeleteMasterNjkb :exec
+DELETE FROM master_njkb WHERE id = $1;
+
+-- name: GetKendaraanPajakByPlatAdmin :one
+SELECT * FROM kendaraan_pajak 
+WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', ''));
+
+-- name: GetAllKendaraanPajakAdmin :many
+SELECT plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, tahun_buat, status_aktif, masa_pajak 
+FROM kendaraan_pajak 
+ORDER BY created_at DESC 
+LIMIT sqlc.arg('limit_data') OFFSET sqlc.arg('offset_data');
+
+-- name: CountKendaraanPajak :one
+SELECT COUNT(*) FROM kendaraan_pajak;
+
+-- name: GetAllMasterNjkbAdmin :many
+SELECT * FROM master_njkb 
+ORDER BY merk, tahun DESC 
+LIMIT sqlc.arg('limit_data') OFFSET sqlc.arg('offset_data');
+
+-- name: CountMasterNjkb :one
+SELECT COUNT(*) FROM master_njkb;
+
+-- name: GetMasterNjkbById :one
+SELECT * FROM master_njkb 
+WHERE id = $1 LIMIT 1;
