@@ -3,6 +3,7 @@ name: capstone-project
 include:
   - ./siskaperbapo-service/docker-compose.yml
   - ./sidita-service/docker-compose.yml
+  - ./bapenda-service/docker-compose.yml
 
 networks:
   capstone-global-network:
