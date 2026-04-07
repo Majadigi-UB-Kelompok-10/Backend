@@ -9,6 +9,11 @@ services:
     command: redis-server --appendonly yes
     networks:
       - capstone-global-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   siskaperbapo-db:
     image: postgres:18-alpine
@@ -24,6 +29,11 @@ services:
       - ./db/migrations:/docker-entrypoint-initdb.d
     networks:
       - capstone-global-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   siskaperbapo-api:
     build:
@@ -42,8 +52,10 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - siskaperbapo-db
-      - siskaperbapo-redis
+      siskaperbapo-db:
+        condition: service_healthy
+      siskaperbapo-redis:
+        condition: service_healthy
     networks:
       - capstone-global-network
     restart: unless-stopped
