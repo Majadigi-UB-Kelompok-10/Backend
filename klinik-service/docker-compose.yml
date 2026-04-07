@@ -20,7 +20,7 @@ services:
     ports:
       - "5435:5432"
     volumes:
-      - klinik-postgres-data:/var/lib/postgresql/data
+      - klinik-postgres-data:/var/lib/postgresql
       - ./db/migrations:/docker-entrypoint-initdb.d
     networks:
       - capstone-global-network

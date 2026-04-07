@@ -25,7 +25,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - siskaperbapo-postgres-data:/var/lib/postgresql/data
+      - siskaperbapo-postgres-data:/var/lib/postgresql
       - ./db/migrations:/docker-entrypoint-initdb.d
     networks:
       - capstone-global-network
