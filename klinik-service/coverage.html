@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>utils: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/farildzaky/klinik-service/internal/utils/slug.go (100.0%)</option>
+				
+				<option value="file1">github.com/farildzaky/klinik-service/internal/utils/validator.go (98.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package utils
+
+import (
+        "crypto/rand"
+        "encoding/hex"
+        "regexp"
+        "strings"
+        "unicode/utf8"
+)
+
+var (
+        nonAlphanumericRegex = regexp.MustCompile(`[^a-z0-9]+`)
+        multipleHyphenRegex  = regexp.MustCompile(`-+`)
+)
+
+func GenerateSlug(title string) string <span class="cov8" title="1">{
+        slug := strings.ToLower(strings.TrimSpace(title))
+        slug = nonAlphanumericRegex.ReplaceAllString(slug, "-")
+        slug = multipleHyphenRegex.ReplaceAllString(slug, "-")
+        slug = strings.Trim(slug, "-")
+
+        if utf8.RuneCountInString(slug) &gt; 60 </span><span class="cov8" title="1">{
+                runes := []rune(slug)
+                slug = string(runes[:60])
+                slug = strings.Trim(slug, "-")
+        }</span>
+
+        <span class="cov8" title="1">if slug == "" </span><span class="cov8" title="1">{
+                slug = "berita"
+        }</span>
+
+        <span class="cov8" title="1">bytes := make([]byte, 2)
+        rand.Read(bytes)
+        randomStr := hex.EncodeToString(bytes)
+
+        return slug + "-" + randomStr</span>
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">package utils
+
+import (
+        "fmt"
+        "html"
+        "net/url"
+        "path/filepath"
+        "regexp"
+        "strings"
+        "unicode/utf8"
+)
+
+type ValidationError struct {
+        Field   string
+        Message string
+}
+
+var (
+        safeQueryPattern    = regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
+        safeFilenamePattern = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+        emailPattern        = regexp.MustCompile(`^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]+$`)
+        phonePattern        = regexp.MustCompile(`^(?:\+62|62|0)[2-9][0-9]{7,13}$`)
+)
+
+func ValidateQueryString(input string, maxLength int, fieldName string) (string, *ValidationError) <span class="cov8" title="1">{
+        if input == "" </span><span class="cov8" title="1">{
+                return "", nil
+        }</span>
+
+        <span class="cov8" title="1">input = strings.TrimSpace(input)
+
+        if utf8.RuneCountInString(input) &gt; maxLength </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{
+                        Field:   fieldName,
+                        Message: fmt.Sprintf("Input terlalu panjang (maksimal %d karakter)", maxLength),
+                }
+        }</span>
+
+        <span class="cov8" title="1">sanitized := safeQueryPattern.ReplaceAllString(input, "")
+
+        sanitized = html.EscapeString(sanitized)
+
+        if strings.TrimSpace(sanitized) == "" &amp;&amp; input != "" </span><span class="cov0" title="0">{
+                return "", &amp;ValidationError{
+                        Field:   fieldName,
+                        Message: "Input mengandung karakter berbahaya yang tidak diizinkan",
+                }
+        }</span>
+
+        <span class="cov8" title="1">return strings.TrimSpace(sanitized), nil</span>
+}
+
+func ValidateTextContent(input string, maxLength int, fieldName string) (string, *ValidationError) <span class="cov8" title="1">{
+        input = strings.TrimSpace(input)
+        if input == "" </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{Field: fieldName, Message: fieldName + " tidak boleh kosong"}
+        }</span>
+        <span class="cov8" title="1">if utf8.RuneCountInString(input) &gt; maxLength </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{Field: fieldName, Message: fmt.Sprintf("%s melebihi batas %d karakter", fieldName, maxLength)}
+        }</span>
+        
+        <span class="cov8" title="1">return html.EscapeString(input), nil</span>
+}
+
+func ValidateEmail(input string) (string, *ValidationError) <span class="cov8" title="1">{
+        input = strings.TrimSpace(input)
+        if !emailPattern.MatchString(input) </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{Field: "email", Message: "Format email tidak valid"}
+        }</span>
+        <span class="cov8" title="1">return input, nil</span>
+}
+
+func ValidatePhone(input string) (string, *ValidationError) <span class="cov8" title="1">{
+        input = strings.TrimSpace(input)
+        if !phonePattern.MatchString(input) </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{Field: "no_hp", Message: "Format nomor HP tidak valid (gunakan awalan 08 / +62 / 62)"}
+        }</span>
+        <span class="cov8" title="1">return input, nil</span>
+}
+
+func ValidateURL(input, fieldName string) (string, *ValidationError) <span class="cov8" title="1">{
+        input = strings.TrimSpace(input)
+        if input == "" </span><span class="cov8" title="1">{
+                return "", nil 
+        }</span>
+
+        <span class="cov8" title="1">parsedURL, err := url.ParseRequestURI(input)
+        if err != nil || (parsedURL.Scheme != "http" &amp;&amp; parsedURL.Scheme != "https") </span><span class="cov8" title="1">{
+                return "", &amp;ValidationError{
+                        Field:   fieldName,
+                        Message: "Format link tidak valid (harus menggunakan http:// atau https://)",
+                }
+        }</span>
+        <span class="cov8" title="1">return input, nil</span>
+}
+
+func ValidateImageFilename(original string) string <span class="cov8" title="1">{
+        filename := strings.TrimSpace(original)
+
+        filename = filepath.Clean(filename)
+        filename = filepath.Base(filename) 
+
+        filename = safeFilenamePattern.ReplaceAllString(filename, "")
+
+        if filename == "" || filename == "." </span><span class="cov8" title="1">{
+                filename = "image_file"
+        }</span>
+
+        <span class="cov8" title="1">return filename</span>
+}
+
+func ValidatePaginationParams(pageStr, limitStr string) (page int, limit int) <span class="cov8" title="1">{
+        page = 1
+        limit = 10
+
+        if p, ok := parseInt(pageStr); ok &amp;&amp; p &gt; 0 </span><span class="cov8" title="1">{
+                page = p
+        }</span>
+        <span class="cov8" title="1">if l, ok := parseInt(limitStr); ok &amp;&amp; l &gt; 0 </span><span class="cov8" title="1">{
+                limit = l
+        }</span>
+
+        <span class="cov8" title="1">if limit &gt; 50 </span><span class="cov8" title="1">{
+                limit = 50
+        }</span>
+
+        <span class="cov8" title="1">return page, limit</span>
+}
+
+func parseInt(s string) (int, bool) <span class="cov8" title="1">{
+        if s == "" || len(s) &gt; 3 </span><span class="cov8" title="1">{
+                return 0, false
+        }</span>
+        <span class="cov8" title="1">var result int
+        for _, ch := range s </span><span class="cov8" title="1">{
+                if ch &lt; '0' || ch &gt; '9' </span><span class="cov8" title="1">{
+                        return 0, false
+                }</span>
+                <span class="cov8" title="1">result = result*10 + int(ch-'0')</span>
+        }
+        <span class="cov8" title="1">return result, true</span>
+}</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
