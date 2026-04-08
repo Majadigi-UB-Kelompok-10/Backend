@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,8 +29,8 @@ const (
 	ContextDBTimeout     = 5 * time.Second
 	CacheWarmupTimeout   = 10 * time.Second
 	CacheShortTTL        = 1 * time.Minute
-	CacheLongTTL         = 12 * time.Hour 
-	CacheAreaTTL         = 24 * time.Hour 
+	CacheLongTTL         = 12 * time.Hour
+	CacheAreaTTL         = 24 * time.Hour
 )
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
@@ -333,7 +336,7 @@ func (h *BahanPokokHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 	}
 
 	cacheKey := fmt.Sprintf("detail_bahan:%s:%s:%s", slugParam, tanggalReqStr, areaSlugPilihan)
-	
+
 	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
 		if bytesData, isBytes := cachedData.([]byte); isBytes {
 			c.Set("Content-Type", "application/json")
@@ -897,4 +900,238 @@ func (h *BahanPokokHandler) DeleteBahanPokok(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(BaseResponse{
 		Pesan: "Bahan pokok dan fotonya berhasil dihapus secara permanen!",
 	})
+}
+
+// =====================================================================
+// 10. Main SDUI Page Parser Service
+// =====================================================================
+// Define the specific structure for your SDUI aggregation
+// type SduiDataResponse struct {
+// 	BahanPokok []string `json:"bahan-pokok"`
+// 	AllAreas   []string `json:"all-areas"`
+// }
+
+// func (h *BahanPokokHandler) GetSduiMainData(c fiber.Ctx) error {
+// 	cacheKey := "sdui_main_aggregation"
+
+// 	// 1. Check Cache first (Optimized)
+// 	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+// 		if bytesData, isBytes := cachedData.([]byte); isBytes {
+// 			c.Set("Content-Type", "application/json")
+// 			return c.Send(bytesData)
+// 		}
+// 	}
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+// 	defer cancel()
+
+// 	g, gCtx := errgroup.WithContext(ctx)
+
+// 	var bahanData []db.BahanPokok
+// 	var areaData []db.MasterArea
+
+// 	// 2. Run queries concurrently
+// 	g.Go(func() error {
+// 		// We use a high limit to get all commodities for the parser
+// 		data, err := h.Queries.GetAllBahanPokok(gCtx, db.GetAllBahanPokokParams{
+// 			Limit:  1000,
+// 			Offset: 0,
+// 			Nama:   "",
+// 		})
+// 		bahanData = data
+// 		return err
+// 	})
+
+// 	g.Go(func() error {
+// 		data, err := h.Queries.GetAllAreas(gCtx)
+// 		areaData = data
+// 		return err
+// 	})
+
+// 	if err := g.Wait(); err != nil {
+// 		return c.Status(500).JSON(BaseResponse{Error: "Gagal memuat data SDUI"})
+// 	}
+
+// 	// 3. Extract only the names as requested
+// 	finalBahan := make([]string, 0, len(bahanData))
+// 	for _, b := range bahanData {
+// 		finalBahan = append(finalBahan, b.Nama)
+// 	}
+
+// 	finalAreas := make([]string, 0, len(areaData))
+// 	for _, a := range areaData {
+// 		finalAreas = append(finalAreas, a.Nama)
+// 	}
+
+// 	// 4. Build final response
+// 	response := SduiDataResponse{
+// 		BahanPokok: finalBahan,
+// 		AllAreas:   finalAreas,
+// 	}
+
+// 	// 5. Cache for 12 hours (consistent with CacheLongTTL)
+// 	cache.GlobalCache.Set(cacheKey, response, CacheLongTTL)
+
+// 	return c.JSON(response)
+// }
+
+// =====================================================================
+// 10. Main SDUI Page Parser Service (Interpolation)
+// =====================================================================
+func (h *BahanPokokHandler) GetSduiMainData(c fiber.Ctx) error {
+	cacheKey := "sdui_main_interpolated"
+
+	// 1. Check Cache first
+	// if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+	// 	if bytesData, isBytes := cachedData.([]byte); isBytes {
+	// 		c.Set("Content-Type", "application/json")
+	// 		return c.Send(bytesData)
+	// 	}
+	// }
+
+	// We might want a slightly longer timeout since we are making an external HTTP call
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	var bahanData []db.BahanPokok
+	var areaData []db.MasterArea
+	var templateBytes []byte
+
+	// 2a. Fetch Bahan Pokok Concurrently
+	g.Go(func() error {
+		data, err := h.Queries.GetAllBahanPokok(gCtx, db.GetAllBahanPokokParams{
+			Limit:  1000,
+			Offset: 0,
+			Nama:   "",
+		})
+		bahanData = data
+		return err
+	})
+
+	// 2b. Fetch Areas Concurrently
+	g.Go(func() error {
+		data, err := h.Queries.GetAllAreas(gCtx)
+		areaData = data
+		return err
+	})
+
+	// 2c. Fetch External JSON Template Concurrently
+	g.Go(func() error {
+		templateURL := os.Getenv("SDUI_TEMPLATE_URL")
+
+		req, err := http.NewRequestWithContext(gCtx, http.MethodGet, templateURL, nil)
+		if err != nil {
+			return err
+		}
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to fetch template, status: %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		templateBytes = body
+		return nil
+	})
+
+	// Wait for all 3 tasks (2 DB queries + 1 HTTP request) to finish
+	if err := g.Wait(); err != nil {
+		h.Logger.Error("Failed to fetch SDUI interpolation data", err, WithContext())
+		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{
+			Error: "Gagal memuat data layout SDUI",
+		})
+	}
+
+	// 3. Extract only the names
+	finalBahan := make([]string, 0, len(bahanData))
+	for _, b := range bahanData {
+		finalBahan = append(finalBahan, b.Nama)
+	}
+
+	finalAreas := make([]string, 0, len(areaData))
+	for _, a := range areaData {
+		finalAreas = append(finalAreas, a.Nama)
+	}
+
+	// 4. Convert arrays to JSON strings so they format properly as arrays in the template
+	// bahanJSONBytes, err := json.Marshal(finalBahan)
+	// if err != nil {
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal memproses data bahan"})
+	// }
+
+	// areaJSONBytes, err := json.Marshal(finalAreas)
+	// if err != nil {
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal memproses data area"})
+	// }
+
+	// // 5. Perform String Interpolation
+	// templateStr := string(templateBytes)
+
+	// // Replace including the quotation marks.
+	// // Example: `"items": "$bahan-pokok"` becomes `"items": ["Bawang Merah", "Beras Medium"]`
+	// templateStr = strings.Replace(templateStr, `"$ListBapok"`, string(bahanJSONBytes), -1)
+	// templateStr = strings.Replace(templateStr, `"$ListArea"`, string(areaJSONBytes), -1)
+
+	// finalResponseBytes := []byte(templateStr)
+
+	// // 6. Cache the interpolated raw string
+	// cache.GlobalCache.Set(cacheKey, finalResponseBytes, CacheLongTTL)
+
+	// // 7. Send back as raw JSON
+	// c.Set("Content-Type", "application/json")
+	// return c.Send(finalResponseBytes)
+
+	bahanJSONBytes, err := json.Marshal(finalBahan)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal memproses data bahan"})
+	}
+	bahanStr := string(bahanJSONBytes)
+
+	// Safely strip the '[' and ']' to get just `"item1","item2"`
+	bahanReplacement := ""
+	if len(bahanStr) >= 2 {
+		bahanReplacement = bahanStr[1 : len(bahanStr)-1]
+	}
+
+	areaJSONBytes, err := json.Marshal(finalAreas)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal memproses data area"})
+	}
+	areaStr := string(areaJSONBytes)
+
+	// Safely strip the '[' and ']'
+	areaReplacement := ""
+	if len(areaStr) >= 2 {
+		areaReplacement = areaStr[1 : len(areaStr)-1]
+	}
+
+	// 5. Perform String Interpolation
+	templateStr := string(templateBytes)
+
+	// Replace `"$bahan-pokok"` (including the quotation marks) with `"Bawang Merah","Beras Medium"`
+	// If the template is: `"items": ["$bahan-pokok"]`
+	// It will become: `"items": ["Bawang Merah","Beras Medium"]`
+	templateStr = strings.ReplaceAll(templateStr, `"$ListBapok"`, bahanReplacement)
+	templateStr = strings.ReplaceAll(templateStr, `"$ListArea"`, areaReplacement)
+	templateStr = strings.ReplaceAll(templateStr, `$cardDataUrl`, os.Getenv("CARD_DATA_URL"))
+
+	finalResponseBytes := []byte(templateStr)
+
+	// 6. Cache the interpolated raw string
+	cache.GlobalCache.Set(cacheKey, finalResponseBytes, CacheLongTTL)
+
+	// 7. Send back as raw JSON
+	c.Set("Content-Type", "application/json")
+	return c.Send(finalResponseBytes)
 }

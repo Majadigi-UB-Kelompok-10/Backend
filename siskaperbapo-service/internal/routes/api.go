@@ -1,11 +1,11 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/farildzaky/siskaperbapo-service/internal/handlers"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
-	"time"
-
 )
 
 func SetupRoutes(app *fiber.App, bpHandler *handlers.BahanPokokHandler) {
@@ -26,7 +26,7 @@ func SetupRoutes(app *fiber.App, bpHandler *handlers.BahanPokokHandler) {
 	})
 
 	api.Get("/bahan-pokok", bpHandler.GetAllBahanPokok)
-    api.Get("/bahan-pokok/:slug", bpHandler.GetDetailBahanPokok)
+	api.Get("/bahan-pokok/:slug", bpHandler.GetDetailBahanPokok)
 	api.Get("/areas", bpHandler.GetAllAreas)
 	api.Post("/bahan-pokok", postLimiter, bpHandler.CreateBahanPokok)
 	api.Post("/harga-harian", postLimiter, bpHandler.CreateHargaHarian)
@@ -34,4 +34,6 @@ func SetupRoutes(app *fiber.App, bpHandler *handlers.BahanPokokHandler) {
 	api.Delete("/harga-harian/:id", postLimiter, bpHandler.DeleteHargaHarian)
 	api.Put("/bahan-pokok/:id", postLimiter, bpHandler.UpdateBahanPokok)
 	api.Delete("/bahan-pokok/:id", postLimiter, bpHandler.DeleteBahanPokok)
+
+	api.Get("/siskaperbapo-page", bpHandler.GetSduiMainData)
 }
