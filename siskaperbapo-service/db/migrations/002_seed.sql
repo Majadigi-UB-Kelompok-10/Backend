@@ -22,9 +22,12 @@ SET row_security = off;
 -- Data for Name: bahan_pokok; Type: TABLE DATA; Schema: public; Owner: dzaky
 --
 
-INSERT INTO public.bahan_pokok VALUES (1, 'Nasi Kuning', 'nasi-kuning', 'kg', 'https://res.cloudinary.com/dlscbkffi/image/upload/v1774617100/siskaperbapo_images/jcqodblgzav1fdpgvwal.jpg');
-INSERT INTO public.bahan_pokok VALUES (2, 'Nasi Putih', 'nasi-putih', 'kg', 'https://res.cloudinary.com/dlscbkffi/image/upload/v1774619421/siskaperbapo_images/zacpqmc36mqybvjaiy1b.jpg');
-
+INSERT INTO public.bahan_pokok VALUES (1, 'Bawang Merah / Kg', 'bawang-merah', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/bawang-merah.webp');
+INSERT INTO public.bahan_pokok VALUES (2, 'Beras Medium / Kg', 'beras-medium', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/beras-premium.webp');
+INSERT INTO public.bahan_pokok VALUES (3, 'Bawang Putih / Kg', 'bawang-putih', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/bawang-putih.webp');
+INSERT INTO public.bahan_pokok VALUES (4, 'Cabai Rawit / Kg', 'cabai-rawit', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/cabai-rawit.webp');
+INSERT INTO public.bahan_pokok VALUES (5, 'Cabai Merah / Kg', 'cabai-merah', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/cabe-merah.webp');
+INSERT INTO public.bahan_pokok VALUES (6, 'Tepung Terigu / Kg', 'tepung-terigu', 'kg', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/tepung-terigu.webp');
 
 --
 -- Data for Name: master_area; Type: TABLE DATA; Schema: public; Owner: dzaky
@@ -83,6 +86,10 @@ INSERT INTO public.harga_harian VALUES (7, 1, 20, 15000, '2026-03-26');
 INSERT INTO public.harga_harian VALUES (8, 1, 20, 19000, '2026-03-29');
 INSERT INTO public.harga_harian VALUES (9, 1, 20, 21000, '2026-03-28');
 INSERT INTO public.harga_harian VALUES (11, 1, 20, 21000, '2026-03-25');
+INSERT INTO public.harga_harian VALUES (12, 3, 20, 21000, '2026-03-25');
+INSERT INTO public.harga_harian VALUES (13, 4, 20, 21000, '2026-03-25');
+INSERT INTO public.harga_harian VALUES (15, 5, 20, 21000, '2026-03-25');
+INSERT INTO public.harga_harian VALUES (16, 6, 20, 21000, '2026-03-25');
 
 
 --
