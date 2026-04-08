@@ -14,7 +14,7 @@ func TestGenerateSlug(t *testing.T) {
 		{"Judul Biasa", "Awas Hoaks Air Garam", "awas-hoaks-air-garam"},
 		{"Judul dengan Spasi Lebar dan Simbol", "  CEK FAKTA !!! Bahaya...   ", "cek-fakta-bahaya"},
 		{"Judul Kepanjangan", "Satu Dua Tiga Empat Lima Enam Tujuh Delapan Sembilan Sepuluh Sebelas Dua Belas", "satu-dua-tiga-empat-lima-enam-tujuh-delapan-sembilan-sepuluh"}, // Terpotong max 60 karakter
-		{"Judul Simbol Saja", "!!! ??? @@@", "berita"}, // Fallback karena semua simbol dihapus
+		{"Judul Simbol Saja", "!!! ??? @@@", "berita"}, 
 	}
 
 	for _, tt := range tests {

@@ -46,9 +46,7 @@ CREATE TABLE hoax_news (
     ) STORED
 );
 
--- ==========================================
--- INDEXING STRATEGY (Sangat Krusial untuk Performa)
--- ==========================================
+
 
 CREATE INDEX idx_hoax_reports_ticket ON hoax_reports(ticket_number);
 CREATE INDEX idx_hoax_news_category ON hoax_news(category_id);

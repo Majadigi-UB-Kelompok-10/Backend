@@ -791,7 +791,7 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 
 func (h *HoaxHandler) RejectReportAdmin(c fiber.Ctx) error {
 	reportID := c.FormValue("report_id")
-	reason := c.FormValue("reason") // Admin wajib mengisi alasan penolakan
+	reason := c.FormValue("reason") 
 
 	if reportID == "" || reason == "" {
 		return c.Status(400).JSON(ErrorResponse{
