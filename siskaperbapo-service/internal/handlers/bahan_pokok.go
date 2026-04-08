@@ -982,12 +982,12 @@ func (h *BahanPokokHandler) GetSduiMainData(c fiber.Ctx) error {
 	cacheKey := "sdui_main_interpolated"
 
 	// 1. Check Cache first
-	// if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
-	// 	if bytesData, isBytes := cachedData.([]byte); isBytes {
-	// 		c.Set("Content-Type", "application/json")
-	// 		return c.Send(bytesData)
-	// 	}
-	// }
+	if cachedData, ok := cache.GlobalCache.Get(cacheKey); ok {
+		if bytesData, isBytes := cachedData.([]byte); isBytes {
+			c.Set("Content-Type", "application/json")
+			return c.Send(bytesData)
+		}
+	}
 
 	// We might want a slightly longer timeout since we are making an external HTTP call
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1119,9 +1119,7 @@ func (h *BahanPokokHandler) GetSduiMainData(c fiber.Ctx) error {
 	// 5. Perform String Interpolation
 	templateStr := string(templateBytes)
 
-	// Replace `"$bahan-pokok"` (including the quotation marks) with `"Bawang Merah","Beras Medium"`
-	// If the template is: `"items": ["$bahan-pokok"]`
-	// It will become: `"items": ["Bawang Merah","Beras Medium"]`
+	// Replace
 	templateStr = strings.ReplaceAll(templateStr, `"$ListBapok"`, bahanReplacement)
 	templateStr = strings.ReplaceAll(templateStr, `"$ListArea"`, areaReplacement)
 	templateStr = strings.ReplaceAll(templateStr, `$cardDataUrl`, os.Getenv("CARD_DATA_URL"))
@@ -1129,7 +1127,7 @@ func (h *BahanPokokHandler) GetSduiMainData(c fiber.Ctx) error {
 	finalResponseBytes := []byte(templateStr)
 
 	// 6. Cache the interpolated raw string
-	cache.GlobalCache.Set(cacheKey, finalResponseBytes, CacheLongTTL)
+	cache.GlobalCache.Set(cacheKey, json.RawMessage(finalResponseBytes), CacheLongTTL)
 
 	// 7. Send back as raw JSON
 	c.Set("Content-Type", "application/json")
