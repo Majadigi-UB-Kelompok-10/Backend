@@ -57,7 +57,7 @@ INSERT INTO "public"."policy_list" ("policy_list_id", "service_list_id", "benefi
 --
 
 INSERT INTO "public"."endpoint_list" ("endpoint_list_id", "slug_name", "page_url", "created_at") VALUES
-	('1d81c635-4f53-4060-b849-a62e80aab1fa', 'siskaperbapo-page', 'http://siskaperbapo-api:8080/siskaperbapo-page', '2026-03-25 02:58:48.169506+00');
+	('1d81c635-4f53-4060-b849-a62e80aab1fa', 'siskaperbapo-page', 'http://siskaperbapo-api:8080/api/v1/siskaperbapo-page', '2026-03-25 02:58:48.169506+00');
 
 --
 -- Data for Name: category_list; Type: TABLE DATA; Schema: public; Owner: postgres
