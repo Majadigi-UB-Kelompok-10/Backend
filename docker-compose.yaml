@@ -4,6 +4,7 @@ include:
   - ./siskaperbapo-service/docker-compose.yml
   - ./sidita-service/docker-compose.yml
   - ./bapenda-service/docker-compose.yml
+  - ./api-gateway/docker-compose.yaml
   # - ./klinik-service/docker-compose.yml
 
 networks:
