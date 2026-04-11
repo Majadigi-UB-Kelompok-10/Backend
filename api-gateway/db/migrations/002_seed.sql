@@ -51,6 +51,37 @@ INSERT INTO "public"."operational_list" ("operational_list_id", "service_list_id
 INSERT INTO "public"."policy_list" ("policy_list_id", "service_list_id", "benefit", "instruction", "created_at") VALUES
 	('cba13b3d-d65f-4d04-b90c-bf35ff2f2528', '1d81c635-4f53-4060-b849-a62e80aab1fa', '{"Manfaat": {"1": "Akses informasi harga bahan pokok secara harian dan transparan.", "2": "Pemantauan ketersediaan bahan pokok dengan mudah, kapan saja.", "3": "Mendukung pengendalian inflasi dan menjaga stabilitas harga bahan pokok."}}', '{"Sistem": "Website milik Disperindag Jatim yang menyediakan data harian harga dan ketersediaan bahan pokok secara detail.", "Cek Harga Sembako Lewat SISKAPERBAPO": {"1": "Akses situs web resmi SISKAPERBAPO", "2": "Telusuri data harga bahan pokok berdasarkan kategori bahan pokok/", "3": "Pilih lokasi atau wilayah kabupaten/kota yang ingin dipantau.", "4": "Lihat grafik tren harga harian dan informasi ketersediaan barang.", "5": "Gunakan fitur perbandingan harga produsen dan konsumen untuk analisis."}}', '2026-03-25 02:58:48.169506+00');
 
+
+--
+-- Data for Name: endpoint_list; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."endpoint_list" ("endpoint_list_id", "slug_name", "page_url", "created_at") VALUES
+	('1d81c635-4f53-4060-b849-a62e80aab1fa', 'siskaperbapo-page', 'http://siskaperbapo-api:8080/siskaperbapo-page', '2026-03-25 02:58:48.169506+00');
+
+--
+-- Data for Name: category_list; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."category_list" ("category_list_id", "name", "description", "created_at") VALUES
+    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'Ekonomi & Perdagangan', 'Layanan terkait pemantauan ekonomi, harga pasar, dan perdagangan.', '2026-04-11 12:00:00+00');
+
+
+--
+-- Data for Name: services_has_categories; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."services_has_categories" ("service_list_id", "category_list_id", "created_at") VALUES
+    ('1d81c635-4f53-4060-b849-a62e80aab1fa', 'a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', '2026-04-11 12:01:00+00');
+
+
+--
+-- Data for Name: integration_list; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO "public"."integration_list" ("integration_list_id", "service_list_id", "endpoint_list_id", "title", "icon_url", "created_at") VALUES
+    ('b2c3d4e5-f6a7-4b5c-8d9e-0f1a2b3c4d5e', '1d81c635-4f53-4060-b849-a62e80aab1fa', '1d81c635-4f53-4060-b849-a62e80aab1fa', 'SISKAPERBAPO', 'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/siskaperbapo/logo-provinsi-jawa-timur.webp', '2026-04-11 12:02:00+00');
+
 --
 -- PostgreSQL database dump complete
 --
