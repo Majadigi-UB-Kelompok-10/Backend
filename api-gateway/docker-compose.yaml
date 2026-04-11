@@ -1,15 +1,29 @@
 services:
-  majadigi-api-db:
+  majadigi-gateway-redis:
+    image: redis:8.6
+    container_name: majadigi-gateway-redis
+    ports:
+      - "6388:6379"
+    volumes:
+      - majadigi-gateway-redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  majadigi-gateway-db:
     image: postgres:18-alpine
-    container_name: majadigi-api-db
+    container_name: majadigi-gateway-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "5438:5432"
     volumes:
-      - majadigi-api-db:/var/lib/postgresql
+      - majadigi-gateway-db:/var/lib/postgresql
       - ./db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -17,5 +31,27 @@ services:
       timeout: 5s
       retries: 5
 
+  majadigi-gateway-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: majadigi-gateway-api
+    ports:
+      - "8888:8888"
+    environment:
+      - PORT=8888
+      - ENVIRONMENT=${ENVIRONMENT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    volumes:
+      - .:/app
+    depends_on:
+      majadigi-gateway-db:
+        condition: service_healthy
+      majadigi-gateway-redis:
+        condition: service_healthy
+
 volumes:
-  majadigi-api-db:
+  majadigi-gateway-db:
+  majadigi-gateway-redis-data:
