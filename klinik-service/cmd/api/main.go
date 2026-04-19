@@ -16,12 +16,14 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
-	"github.com/gofiber/fiber/v3/middleware/helmet"	
+	"github.com/gofiber/fiber/v3/middleware/helmet"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
@@ -100,6 +102,7 @@ func main() {
 	}
 	slog.Info("PostgreSQL Terhubung")
 
+
 	initializeCache()
 
 	var cld *cloudinary.Cloudinary
@@ -126,11 +129,12 @@ func main() {
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
 
 	app.Use(helmet.New(helmet.Config{
-		XSSProtection:           "1; mode=block",
-		ContentTypeNosniff:      "nosniff",
-		XFrameOptions:           "DENY",
-		HSTSMaxAge:         31536000, 
-		HSTSPreloadEnabled: true,	}))
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		HSTSMaxAge:         31536000,
+		HSTSPreloadEnabled: true,
+	}))
 
 	app.Use(logger.New(logger.Config{
 		Format: `{"time":"${time}", "level":"INFO", "method":"${method}", "path":"${path}", "status":${status}, "latency":"${latency}"}` + "\n",
@@ -187,12 +191,16 @@ func main() {
 	queries := db.New(pool)
 	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld)
 	routes.SetupRoutes(app, hoaxHandler)
-	
+
 	slog.Info("Routes API Terkonfigurasi")
+
+	gatewayDBUrl := os.Getenv("GATEWAY_DATABASE_URL")
+	registry.AutoRegister(gatewayDBUrl, "klinik", "http://klinik-api:8080/api/v1")
+    slog.Info("Proses AutoRegister API ke Gateway telah dipanggil")
 
 	go hoaxHandler.CacheWarmup()
 	go func() {
-		fmt.Printf("\n🚀 Klinik Hoaks Service (v1.0) berjalan di port :%s\n", port)
+		fmt.Printf("\nKlinik Hoaks Service (v1.0) berjalan di port :%s\n", port)
 		if err := app.Listen(":" + port); err != nil && err.Error() != "shutting down" {
 			log.Fatalf("Server error: %v\n", err)
 		}
