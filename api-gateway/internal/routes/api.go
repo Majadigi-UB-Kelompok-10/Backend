@@ -3,49 +3,71 @@ package routes
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/proxy"
 )
 
-func SetupDynamicEndpoint(app *fiber.App, queries *db.Queries, ctx context.Context) error {
+type RouteRegistry struct {
+	sync.RWMutex
+	Routes map[string]string
+}
+
+var GatewayRegistry = &RouteRegistry{
+	Routes: make(map[string]string),
+}
+
+func RefreshEndpoints(ctx context.Context, queries *db.Queries) error {
+	dbRoutes, err := queries.ListEndpoints(ctx)
+	if err != nil {
+		return fmt.Errorf("db error: %w", err)
+	}
+
+	newRoutes := make(map[string]string)
+	for _, r := range dbRoutes {
+		newRoutes[r.SlugName] = r.PageUrl
+	}
+
+	GatewayRegistry.Lock()
+	GatewayRegistry.Routes = newRoutes
+	GatewayRegistry.Unlock()
+
+	fmt.Printf("RAM Synced: %d rute dinamis siap digunakan\n", len(newRoutes))
+	return nil
+}
+
+func SetupDynamicEndpoint(app *fiber.App) {
 	api := app.Group("/api/v1")
 
-	routes, err := queries.ListEndpoints(ctx)
-	if err != nil {
-		return err
-	}
+	api.All("/:slug/*", func(c fiber.Ctx) error {
+		slug := c.Params("slug")
 
-	// Generate based on Data
-	for _, route := range routes {
-		slug := route.SlugName
-		url := route.PageUrl
+		GatewayRegistry.RLock()
+		targetUrl, exists := GatewayRegistry.Routes[slug]
+		GatewayRegistry.RUnlock()
 
-		// Register the GET endpoint using the slug_name
-		api.Get("/"+slug, func(c fiber.Ctx) error {
+		if !exists {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error":   "Not Found",
+				"message": "Endpoint layanan tidak ditemukan.",
+			})
+		}
 
-			// For now, just return a success message acknowledging the slug
-			// return c.JSON(handlers.SuccessResponse{
-			// 	Pesan: "Sukses",
-			// 	Data: map[string]any{
-			// 		"slug": slug,
-			// 		"id":   id,
-			// 		"url":  url,
-			// 	},
-			// })
+		extraPath := c.Params("*")
+		if extraPath != "" {
+			targetUrl = targetUrl + "/" + extraPath
+		}
 
-			if err := proxy.Do(c, url); err != nil {
-				fmt.Printf("Proxy error for slug %s to %s: %v\n", slug, url, err)
-				return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-					"error": "Service temporarily unavailable",
-				})
-			}
+		if err := proxy.Do(c, targetUrl); err != nil {
+			fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error":   "Bad Gateway",
+				"message": "Layanan sedang mengalami gangguan.",
+			})
+		}
 
-			return nil
-		})
-	}
-
-	fmt.Println("Successfully registered", len(routes), "dynamic endpoints")
-	return nil
+		return nil
+	})
 }
