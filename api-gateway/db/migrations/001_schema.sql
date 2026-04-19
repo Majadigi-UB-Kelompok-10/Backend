@@ -112,3 +112,19 @@ COMMENT ON TABLE "public"."policy_list" IS 'Policies data for services';
 ALTER TABLE ONLY "public"."policy_list"
     ADD CONSTRAINT "policy_list_pkey" PRIMARY KEY ("policy_list_id"),
     ADD CONSTRAINT "service_list_id_fkey" FOREIGN KEY ("service_list_id") REFERENCES "public"."service_list"("service_list_id") ON DELETE CASCADE;
+
+
+
+CREATE OR REPLACE FUNCTION notify_gateway_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_notify('gateway_refresh_channel', 'refresh_now');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_endpoint_update ON endpoint_list;
+
+CREATE TRIGGER trg_endpoint_update
+AFTER INSERT OR UPDATE OR DELETE ON endpoint_list
+FOR EACH STATEMENT EXECUTE FUNCTION notify_gateway_update();
