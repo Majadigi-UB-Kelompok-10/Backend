@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
-	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
+	gatewayAdmin "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers/gateway_admin"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/routes"
 	init_helper "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/init_helper"
 	"github.com/bytedance/sonic"
@@ -49,9 +49,11 @@ func main() {
 		log.Printf("Peringatan: Gagal load rute awal: %v\n", err)
 	}
 
-	adminHandler := handlers.NewGatewayAdminHandler(queries)
+	adminHandler := gatewayAdmin.NewGatewayAdminHandler(queries)
 	app.Post("/api/v1/admin/gateway/sync", adminHandler.SyncNow)
 
+	routes.SetupPublicRoutes(app, queries)
+	routes.SetupAdminRoutes(app, queries)
 	routes.SetupDynamicEndpoint(app)
 	fmt.Println("Dynamic endpoints configured")
 

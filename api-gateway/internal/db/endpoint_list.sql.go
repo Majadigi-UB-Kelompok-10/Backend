@@ -12,8 +12,8 @@ import (
 )
 
 const createEndpoint = `-- name: CreateEndpoint :one
-INSERT INTO endpoint_list (slug_name, page_url) 
-VALUES ($1, $2) 
+INSERT INTO endpoint_list (slug_name, page_url)
+VALUES ($1, $2)
 RETURNING endpoint_list_id, slug_name, page_url, created_at
 `
 
@@ -35,7 +35,7 @@ func (q *Queries) CreateEndpoint(ctx context.Context, arg CreateEndpointParams) 
 }
 
 const deleteEndpoint = `-- name: DeleteEndpoint :exec
-DELETE FROM endpoint_list 
+DELETE FROM endpoint_list
 WHERE endpoint_list_id = $1
 `
 
@@ -44,8 +44,38 @@ func (q *Queries) DeleteEndpoint(ctx context.Context, endpointListID pgtype.UUID
 	return err
 }
 
+const getAllEndpoints = `-- name: GetAllEndpoints :many
+SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllEndpoints(ctx context.Context) ([]EndpointList, error) {
+	rows, err := q.db.Query(ctx, getAllEndpoints)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EndpointList
+	for rows.Next() {
+		var i EndpointList
+		if err := rows.Scan(
+			&i.EndpointListID,
+			&i.SlugName,
+			&i.PageUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEndpointById = `-- name: GetEndpointById :one
-SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list 
+SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list
 WHERE endpoint_list_id = $1 LIMIT 1
 `
 
@@ -62,7 +92,7 @@ func (q *Queries) GetEndpointById(ctx context.Context, endpointListID pgtype.UUI
 }
 
 const getEndpointBySlug = `-- name: GetEndpointBySlug :one
-SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list 
+SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list
 WHERE slug_name = $1 LIMIT 1
 `
 
@@ -79,7 +109,7 @@ func (q *Queries) GetEndpointBySlug(ctx context.Context, slugName string) (Endpo
 }
 
 const listEndpoints = `-- name: ListEndpoints :many
-SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list 
+SELECT endpoint_list_id, slug_name, page_url, created_at FROM endpoint_list
 ORDER BY created_at DESC
 `
 
@@ -109,9 +139,9 @@ func (q *Queries) ListEndpoints(ctx context.Context) ([]EndpointList, error) {
 }
 
 const updateEndpoint = `-- name: UpdateEndpoint :one
-UPDATE endpoint_list 
-SET slug_name = $2, page_url = $3 
-WHERE endpoint_list_id = $1 
+UPDATE endpoint_list
+SET slug_name = $2, page_url = $3
+WHERE endpoint_list_id = $1
 RETURNING endpoint_list_id, slug_name, page_url, created_at
 `
 

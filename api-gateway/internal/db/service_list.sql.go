@@ -12,8 +12,8 @@ import (
 )
 
 const createService = `-- name: CreateService :one
-INSERT INTO service_list (title, description, icon_url) 
-VALUES ($1, $2, $3) 
+INSERT INTO service_list (title, description, icon_url)
+VALUES ($1, $2, $3)
 RETURNING service_list_id, title, description, icon_url, created_at
 `
 
@@ -37,7 +37,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 }
 
 const deleteService = `-- name: DeleteService :exec
-DELETE FROM service_list 
+DELETE FROM service_list
 WHERE service_list_id = $1
 `
 
@@ -46,8 +46,39 @@ func (q *Queries) DeleteService(ctx context.Context, serviceListID pgtype.UUID) 
 	return err
 }
 
+const getAllServices = `-- name: GetAllServices :many
+SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllServices(ctx context.Context) ([]ServiceList, error) {
+	rows, err := q.db.Query(ctx, getAllServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServiceList
+	for rows.Next() {
+		var i ServiceList
+		if err := rows.Scan(
+			&i.ServiceListID,
+			&i.Title,
+			&i.Description,
+			&i.IconUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getServiceById = `-- name: GetServiceById :one
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list 
+SELECT service_list_id, title, description, icon_url, created_at FROM service_list
 WHERE service_list_id = $1 LIMIT 1
 `
 
@@ -65,7 +96,7 @@ func (q *Queries) GetServiceById(ctx context.Context, serviceListID pgtype.UUID)
 }
 
 const getServiceByTitle = `-- name: GetServiceByTitle :one
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list 
+SELECT service_list_id, title, description, icon_url, created_at FROM service_list
 WHERE title = $1 LIMIT 1
 `
 
@@ -83,7 +114,7 @@ func (q *Queries) GetServiceByTitle(ctx context.Context, title string) (ServiceL
 }
 
 const listServices = `-- name: ListServices :many
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list 
+SELECT service_list_id, title, description, icon_url, created_at FROM service_list
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -120,9 +151,9 @@ func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]S
 }
 
 const updateService = `-- name: UpdateService :one
-UPDATE service_list 
-SET title = $2, description = $3, icon_url = $4 
-WHERE service_list_id = $1 
+UPDATE service_list
+SET title = $2, description = $3, icon_url = $4
+WHERE service_list_id = $1
 RETURNING service_list_id, title, description, icon_url, created_at
 `
 

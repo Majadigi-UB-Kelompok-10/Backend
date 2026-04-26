@@ -12,8 +12,8 @@ import (
 )
 
 const createCategory = `-- name: CreateCategory :one
-INSERT INTO category_list (name, description) 
-VALUES ($1, $2) 
+INSERT INTO category_list (name, description)
+VALUES ($1, $2)
 RETURNING category_list_id, name, description, created_at
 `
 
@@ -35,7 +35,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 }
 
 const deleteCategory = `-- name: DeleteCategory :exec
-DELETE FROM category_list 
+DELETE FROM category_list
 WHERE category_list_id = $1
 `
 
@@ -44,8 +44,38 @@ func (q *Queries) DeleteCategory(ctx context.Context, categoryListID pgtype.UUID
 	return err
 }
 
+const getAllCategories = `-- name: GetAllCategories :many
+SELECT category_list_id, name, description, created_at FROM category_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllCategories(ctx context.Context) ([]CategoryList, error) {
+	rows, err := q.db.Query(ctx, getAllCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CategoryList
+	for rows.Next() {
+		var i CategoryList
+		if err := rows.Scan(
+			&i.CategoryListID,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCategoryById = `-- name: GetCategoryById :one
-SELECT category_list_id, name, description, created_at FROM category_list 
+SELECT category_list_id, name, description, created_at FROM category_list
 WHERE category_list_id = $1 LIMIT 1
 `
 
@@ -62,7 +92,7 @@ func (q *Queries) GetCategoryById(ctx context.Context, categoryListID pgtype.UUI
 }
 
 const getCategoryByName = `-- name: GetCategoryByName :one
-SELECT category_list_id, name, description, created_at FROM category_list 
+SELECT category_list_id, name, description, created_at FROM category_list
 WHERE name = $1 LIMIT 1
 `
 
@@ -79,7 +109,7 @@ func (q *Queries) GetCategoryByName(ctx context.Context, name string) (CategoryL
 }
 
 const listCategories = `-- name: ListCategories :many
-SELECT category_list_id, name, description, created_at FROM category_list 
+SELECT category_list_id, name, description, created_at FROM category_list
 ORDER BY name ASC
 `
 
@@ -109,9 +139,9 @@ func (q *Queries) ListCategories(ctx context.Context) ([]CategoryList, error) {
 }
 
 const updateCategory = `-- name: UpdateCategory :one
-UPDATE category_list 
-SET name = $2, description = $3 
-WHERE category_list_id = $1 
+UPDATE category_list
+SET name = $2, description = $3
+WHERE category_list_id = $1
 RETURNING category_list_id, name, description, created_at
 `
 

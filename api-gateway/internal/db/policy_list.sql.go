@@ -7,20 +7,21 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createPolicy = `-- name: CreatePolicy :one
-INSERT INTO policy_list (service_list_id, benefit, instruction) 
-VALUES ($1, $2, $3) 
+INSERT INTO policy_list (service_list_id, benefit, instruction)
+VALUES ($1, $2, $3)
 RETURNING policy_list_id, service_list_id, benefit, instruction, created_at
 `
 
 type CreatePolicyParams struct {
 	ServiceListID pgtype.UUID
-	Benefit       []byte
-	Instruction   []byte
+	Benefit       json.RawMessage
+	Instruction   json.RawMessage
 }
 
 func (q *Queries) CreatePolicy(ctx context.Context, arg CreatePolicyParams) (PolicyList, error) {
@@ -37,7 +38,7 @@ func (q *Queries) CreatePolicy(ctx context.Context, arg CreatePolicyParams) (Pol
 }
 
 const deletePolicy = `-- name: DeletePolicy :exec
-DELETE FROM policy_list 
+DELETE FROM policy_list
 WHERE service_list_id = $1
 `
 
@@ -46,8 +47,39 @@ func (q *Queries) DeletePolicy(ctx context.Context, serviceListID pgtype.UUID) e
 	return err
 }
 
+const getAllPolicies = `-- name: GetAllPolicies :many
+SELECT policy_list_id, service_list_id, benefit, instruction, created_at FROM policy_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllPolicies(ctx context.Context) ([]PolicyList, error) {
+	rows, err := q.db.Query(ctx, getAllPolicies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PolicyList
+	for rows.Next() {
+		var i PolicyList
+		if err := rows.Scan(
+			&i.PolicyListID,
+			&i.ServiceListID,
+			&i.Benefit,
+			&i.Instruction,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPolicyByServiceId = `-- name: GetPolicyByServiceId :one
-SELECT policy_list_id, service_list_id, benefit, instruction, created_at FROM policy_list 
+SELECT policy_list_id, service_list_id, benefit, instruction, created_at FROM policy_list
 WHERE service_list_id = $1 LIMIT 1
 `
 
@@ -65,16 +97,16 @@ func (q *Queries) GetPolicyByServiceId(ctx context.Context, serviceListID pgtype
 }
 
 const updatePolicy = `-- name: UpdatePolicy :one
-UPDATE policy_list 
-SET benefit = $2, instruction = $3 
-WHERE service_list_id = $1 
+UPDATE policy_list
+SET benefit = $2, instruction = $3
+WHERE service_list_id = $1
 RETURNING policy_list_id, service_list_id, benefit, instruction, created_at
 `
 
 type UpdatePolicyParams struct {
 	ServiceListID pgtype.UUID
-	Benefit       []byte
-	Instruction   []byte
+	Benefit       json.RawMessage
+	Instruction   json.RawMessage
 }
 
 func (q *Queries) UpdatePolicy(ctx context.Context, arg UpdatePolicyParams) (PolicyList, error) {
