@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
+	zstdUtil "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/util"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/proxy"
 )
@@ -40,6 +41,20 @@ func RefreshEndpoints(ctx context.Context, queries *db.Queries) error {
 
 func SetupDynamicEndpoint(app *fiber.App) {
 	api := app.Group("/api/v1")
+
+	// Apply zstd compression middleware to all routes in this group
+	api.Use(zstdUtil.ZstdCompressionMiddleware)
+
+	// Route to list all available endpoints
+	api.Get("/endpoints", func(c fiber.Ctx) error {
+		GatewayRegistry.RLock()
+		defer GatewayRegistry.RUnlock()
+
+		return c.JSON(fiber.Map{
+			"pesan": "Sukses",
+			"data":  GatewayRegistry.Routes,
+		})
+	})
 
 	api.All("/:slug/*", func(c fiber.Ctx) error {
 		slug := c.Params("slug")
