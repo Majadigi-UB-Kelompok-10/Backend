@@ -48,8 +48,10 @@ CREATE TABLE master_njkb (
     CONSTRAINT uq_njkb UNIQUE (merk, tipe, tahun)
 );
 
+
 CREATE UNIQUE INDEX idx_kendaraan_plat_rangka ON kendaraan_pajak(plat_nomor, RIGHT(nomor_rangka, 5));
 CREATE INDEX idx_kendaraan_plat_trgm ON kendaraan_pajak USING GIN (plat_nomor gin_trgm_ops);
 CREATE INDEX idx_kendaraan_masa_pajak ON kendaraan_pajak(masa_pajak);
-
 CREATE INDEX idx_njkb_full ON master_njkb(jenis_kendaraan, merk, model, tipe, tahun);
+
+CREATE INDEX idx_kendaraan_status_aktif ON kendaraan_pajak(status_aktif) WHERE status_aktif = true;
