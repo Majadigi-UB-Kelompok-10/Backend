@@ -47,6 +47,10 @@ func (r *RedisCache) Get(key string) ([]byte, bool) {
 }
 
 func (r *RedisCache) Set(key string, val interface{}) {
+	r.SetWithTTL(key, val, 0)
+}
+
+func (r *RedisCache) SetWithTTL(key string, val interface{}, ttl time.Duration) {
 	ctx, cancel := r.contextWithTimeout()
 	defer cancel()
 
@@ -55,7 +59,7 @@ func (r *RedisCache) Set(key string, val interface{}) {
 		return
 	}
 
-	r.client.Set(ctx, key, data, 0)
+	r.client.Set(ctx, key, data, ttl)
 }
 
 func (r *RedisCache) InvalidatePattern(pattern string) {
