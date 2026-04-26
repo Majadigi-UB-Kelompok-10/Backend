@@ -16,6 +16,8 @@ import (
 	init_helper "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/init_helper"
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/compress"
+	"github.com/gofiber/fiber/v3/middleware/etag"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,6 +37,9 @@ func main() {
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
 	})
+
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestCompression}))
+	app.Use(etag.New(etag.ConfigDefault))
 
 	init_helper.InitializeFiberAppConfig(app, os.Getenv("ALLOWED_ORIGINS"))
 
