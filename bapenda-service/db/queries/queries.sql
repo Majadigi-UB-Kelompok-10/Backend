@@ -3,8 +3,8 @@ SELECT
     plat_nomor_display, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan, cetak_stnk, cetak_tnkb
 FROM kendaraan_pajak
-WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', ''))
-AND RIGHT(nomor_rangka, 5) = UPPER(sqlc.arg('lima_digit_rangka')::text);
+WHERE plat_nomor = sqlc.arg('plat_nomor')
+AND RIGHT(nomor_rangka, 5) = sqlc.arg('lima_digit_rangka');
 
 -- name: CreateKendaraanPajak :one
 INSERT INTO kendaraan_pajak (
@@ -13,22 +13,11 @@ INSERT INTO kendaraan_pajak (
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan,
     cetak_stnk, cetak_tnkb
 ) VALUES (
-    UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', '')),
-    sqlc.arg('plat_nomor_display'),
-    sqlc.arg('nomor_rangka'),
-    sqlc.arg('status_aktif'),
-    sqlc.arg('merk'),
-    sqlc.arg('tipe'),
-    sqlc.arg('warna'),
-    sqlc.arg('tahun_buat'),
-    sqlc.arg('model'),
-    sqlc.arg('masa_pajak'),
-    sqlc.arg('pkb_pokok'),
-    sqlc.arg('opsen_pkb'),
-    sqlc.arg('swdkllj'),
-    sqlc.arg('parkir_berlangganan'),
-    sqlc.arg('cetak_stnk'),
-    sqlc.arg('cetak_tnkb')
+    sqlc.arg('plat_nomor'), sqlc.arg('plat_nomor_display'), sqlc.arg('nomor_rangka'), 
+    sqlc.arg('status_aktif'), sqlc.arg('merk'), sqlc.arg('tipe'), sqlc.arg('warna'), 
+    sqlc.arg('tahun_buat'), sqlc.arg('model'), sqlc.arg('masa_pajak'), sqlc.arg('pkb_pokok'), 
+    sqlc.arg('opsen_pkb'), sqlc.arg('swdkllj'), sqlc.arg('parkir_berlangganan'), 
+    sqlc.arg('cetak_stnk'), sqlc.arg('cetak_tnkb')
 ) RETURNING plat_nomor;
 
 -- name: UpdateKendaraanPajak :exec
@@ -48,7 +37,7 @@ UPDATE kendaraan_pajak SET
     cetak_stnk          = sqlc.arg('cetak_stnk'),
     cetak_tnkb          = sqlc.arg('cetak_tnkb'),
     updated_at          = CURRENT_TIMESTAMP
-WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor_key')::text, ' ', ''));
+WHERE plat_nomor = sqlc.arg('plat_nomor_key');
 
 -- name: GetAllTarifPKB :many
 SELECT jenis_plat, label, tarif_pkb_persen, opsen_pkb_persen,
@@ -105,7 +94,7 @@ DELETE FROM master_njkb WHERE id = $1;
 
 -- name: GetKendaraanPajakByPlatAdmin :one
 SELECT * FROM kendaraan_pajak 
-WHERE plat_nomor = UPPER(REPLACE(sqlc.arg('plat_nomor')::text, ' ', ''));
+WHERE plat_nomor = sqlc.arg('plat_nomor');
 
 -- name: GetAllKendaraanPajakAdmin :many
 SELECT plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, tahun_buat, status_aktif, masa_pajak 
