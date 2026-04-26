@@ -40,22 +40,11 @@ INSERT INTO kendaraan_pajak (
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan,
     cetak_stnk, cetak_tnkb
 ) VALUES (
-    UPPER(REPLACE($1::text, ' ', '')),
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11,
-    $12,
-    $13,
-    $14,
-    $15,
-    $16
+    $1, $2, $3, 
+    $4, $5, $6, $7, 
+    $8, $9, $10, $11, 
+    $12, $13, $14, 
+    $15, $16
 ) RETURNING plat_nomor
 `
 
@@ -435,8 +424,8 @@ SELECT
     plat_nomor_display, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan, cetak_stnk, cetak_tnkb
 FROM kendaraan_pajak
-WHERE plat_nomor = UPPER(REPLACE($1::text, ' ', ''))
-AND RIGHT(nomor_rangka, 5) = UPPER($2::text)
+WHERE plat_nomor = $1
+AND RIGHT(nomor_rangka, 5) = $2
 `
 
 type GetKendaraanByPlatDanRangkaParams struct {
@@ -487,7 +476,7 @@ func (q *Queries) GetKendaraanByPlatDanRangka(ctx context.Context, arg GetKendar
 
 const getKendaraanPajakByPlatAdmin = `-- name: GetKendaraanPajakByPlatAdmin :one
 SELECT plat_nomor, plat_nomor_display, nomor_rangka, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak, pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, cetak_stnk, cetak_tnkb, created_at, updated_at, total_pajak_tahunan FROM kendaraan_pajak 
-WHERE plat_nomor = UPPER(REPLACE($1::text, ' ', ''))
+WHERE plat_nomor = $1
 `
 
 func (q *Queries) GetKendaraanPajakByPlatAdmin(ctx context.Context, platNomor string) (KendaraanPajak, error) {
@@ -592,7 +581,7 @@ UPDATE kendaraan_pajak SET
     cetak_stnk          = $13,
     cetak_tnkb          = $14,
     updated_at          = CURRENT_TIMESTAMP
-WHERE plat_nomor = UPPER(REPLACE($15::text, ' ', ''))
+WHERE plat_nomor = $15
 `
 
 type UpdateKendaraanPajakParams struct {
