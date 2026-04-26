@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,10 +15,15 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/helmet"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+
+	// Import Registry Gateway
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/bapenda-service/internal/cache"
 	"github.com/farildzaky/bapenda-service/internal/db"
@@ -37,12 +43,13 @@ func initializeCache() {
 	if redisURL != "" {
 		redisCache, err := cache.NewRedisCache(redisURL)
 		if err != nil {
-			log.Fatalf("Gagal inisiasi Redis: %v\n", err)
+			slog.Error("Gagal inisiasi Redis Bapenda", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 		cache.GlobalCache = redisCache
-		fmt.Println("Redis Bapenda Terhubung")
+		slog.Info("Redis Cache Bapenda Terhubung")
 	} else {
-		log.Println("Peringatan: REDIS_URL tidak ditemukan, menggunakan SimpleCache (in-memory)")
+		slog.Warn("REDIS_URL tidak ditemukan, menggunakan SimpleCache (in-memory)")
 	}
 }
 
@@ -59,8 +66,14 @@ func getAllowedOrigins() []string {
 }
 
 func main() {
+	loggerHandler := slog.NewJSONHandler(os.Stdout, nil)
+	slog.SetDefault(slog.New(loggerHandler))
+
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	time.Local = loc
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("Info: File .env tidak ditemukan, menggunakan variabel lingkungan sistem")
+		slog.Info("Info: File .env tidak ditemukan, menggunakan variabel lingkungan sistem")
 	}
 
 	port := os.Getenv("PORT")
@@ -71,29 +84,46 @@ func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	config, errConf := pgxpool.ParseConfig(dbURL)
 	if errConf != nil {
-		log.Fatalf("Gagal parse konfigurasi DB: %s\n", maskSensitiveData(errConf.Error()))
+		slog.Error("Gagal parse konfigurasi DB", slog.String("error", maskSensitiveData(errConf.Error())))
+		os.Exit(1)
 	}
 
-	config.MaxConns = 25
+	config.MaxConns = 30 
 	config.MinConns = 5
 	config.MaxConnLifetime = 1 * time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
-		log.Fatalf("Koneksi database gagal: %s\n", maskSensitiveData(err.Error()))
+		slog.Error("Koneksi database gagal", slog.String("error", maskSensitiveData(err.Error())))
+		os.Exit(1)
 	}
-	fmt.Println("PostgreSQL Bapenda Terhubung")
+	slog.Info("PostgreSQL Bapenda Terhubung")
 
 	initializeCache()
 
 	app := fiber.New(fiber.Config{
-		AppName:     "Bapenda Service",
-		JSONEncoder: sonic.Marshal,
-		JSONDecoder: sonic.Unmarshal,
+		AppName:      "Bapenda Service",
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	})
 
-	app.Use(logger.New())
+	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
+	app.Use(helmet.New(helmet.Config{
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		HSTSMaxAge:         31536000,
+		HSTSPreloadEnabled: true,
+	}))
+
+	app.Use(logger.New(logger.Config{
+		Format: `{"time":"${time}", "level":"INFO", "method":"${method}", "path":"${path}", "status":${status}, "latency":"${latency}"}` + "\n",
+	}))
+
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     getAllowedOrigins(),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -111,42 +141,71 @@ func main() {
 		},
 	}))
 
+	app.Get("/health", func(c fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		dbStatus, redisStatus := "OK", "OK"
+		if errPing := pool.Ping(ctx); errPing != nil {
+			dbStatus = "DOWN"
+		}
+		if cache.GlobalCache == nil {
+			redisStatus = "DOWN"
+		}
+
+		status, httpCode := "healthy", 200
+		if dbStatus == "DOWN" || redisStatus == "DOWN" {
+			status, httpCode = "degraded", 503
+		}
+
+		return c.Status(httpCode).JSON(fiber.Map{
+			"status":    status,
+			"database":  dbStatus,
+			"redis":     redisStatus,
+			"timestamp": time.Now().Format(time.RFC3339),
+			"service":   "bapenda-api",
+		})
+	})
+
 	queries := db.New(pool)
 	bapendaHandler := handlers.NewBapendaHandler(queries)
 	routes.SetupRoutes(app, bapendaHandler)
-	fmt.Println("Routes Bapenda Terkonfigurasi")
+	slog.Info("Routes Bapenda Terkonfigurasi")
 
-	// =========================================================
-	// JALANKAN CACHE WARMUP SEBELUM SERVER MENERIMA REQUEST
-	// =========================================================
+
 	bapendaHandler.RunCacheWarmup()
 
+	gatewayDBUrl := os.Getenv("GATEWAY_DATABASE_URL")
+	registry.AutoRegister(gatewayDBUrl, "bapenda", "http://bapenda-api:8080/api/v1")
+	slog.Info("Proses AutoRegister Bapenda ke Gateway telah dipanggil")
+
 	go func() {
-		fmt.Printf("Bapenda Service berjalan di port :%s\n", port)
+		fmt.Printf("\n🚀 Bapenda Service berjalan di port :%s\n", port)
 		if err := app.Listen(":" + port); err != nil && err.Error() != "shutting down" {
-			log.Printf("Server error: %v\n", err)
+			log.Fatalf("Server error: %v\n", err)
 		}
 	}()
 
+	// Graceful Shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	fmt.Println("\nMenerima sinyal shutdown, mematikan server secara bertahap...")
+	slog.Info("Menerima sinyal shutdown, mematikan server secara bertahap...")
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer shutdownCancel()
 
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		log.Printf("Kesalahan saat mematikan server HTTP: %v\n", err)
+		slog.Error("Kesalahan saat mematikan server HTTP", slog.String("error", err.Error()))
 	}
 
-	fmt.Println("Menutup koneksi database...")
+	slog.Info("Menutup koneksi database Bapenda...")
 	pool.Close()
 
 	if redisCache, ok := cache.GlobalCache.(*cache.RedisCache); ok {
-		fmt.Println("Menutup koneksi Redis...")
+		slog.Info("Menutup koneksi Redis Bapenda...")
 		redisCache.Close()
 	}
 
-	fmt.Println("Proses shutdown selesai")
+	slog.Info("Proses shutdown Bapenda selesai dengan aman.")
 }
