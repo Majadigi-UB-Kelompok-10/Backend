@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countServices = `-- name: CountServices :one
+SELECT COUNT(*) FROM service_list
+`
+
+func (q *Queries) CountServices(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countServices)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createService = `-- name: CreateService :one
 INSERT INTO service_list (title, description, icon_url)
 VALUES ($1, $2, $3)

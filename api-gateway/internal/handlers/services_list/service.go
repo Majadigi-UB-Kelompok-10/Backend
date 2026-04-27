@@ -72,12 +72,18 @@ func (h *ServiceHandler) ListServices(c fiber.Ctx) error {
 		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat daftar layanan", Detail: err.Error()})
 	}
 
+	total, err := h.Queries.CountServices(ctx)
+	if err != nil {
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal menghitung jumlah layanan", Detail: err.Error()})
+	}
+
 	return c.JSON(handlers.SuccessResponse{
 		Pesan: "Sukses",
 		Data:  data,
 		Pagination: handlers.PaginationMeta{
 			Page:  page,
 			Limit: limit,
+			Total: total,
 		},
 	})
 }

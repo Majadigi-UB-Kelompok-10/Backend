@@ -29,3 +29,6 @@ WHERE service_list_id = $1;
 -- name: GetAllServices :many
 SELECT * FROM service_list
 ORDER BY created_at DESC;
+
+-- name: CountServices :one
+SELECT COUNT(*) FROM service_list;
