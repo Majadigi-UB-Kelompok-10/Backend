@@ -38,7 +38,7 @@ func main() {
 		JSONDecoder: sonic.Unmarshal,
 	})
 
-	app.Use(compress.New(compress.Config{Level: compress.LevelBestCompression}))
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 	app.Use(etag.New(etag.ConfigDefault))
 
 	init_helper.InitializeFiberAppConfig(app, os.Getenv("ALLOWED_ORIGINS"))
