@@ -5,6 +5,8 @@
 package db
 
 import (
+	"encoding/json"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -49,8 +51,8 @@ type OperationalList struct {
 	ServiceListID     pgtype.UUID
 	ServiceUrl        string
 	Address           pgtype.Text
-	OperationalHour   []byte
-	SocialMedia       []byte
+	OperationalHour   json.RawMessage
+	SocialMedia       json.RawMessage
 	CreatedAt         pgtype.Timestamptz
 }
 
@@ -58,8 +60,8 @@ type OperationalList struct {
 type PolicyList struct {
 	PolicyListID  pgtype.UUID
 	ServiceListID pgtype.UUID
-	Benefit       []byte
-	Instruction   []byte
+	Benefit       json.RawMessage
+	Instruction   json.RawMessage
 	CreatedAt     pgtype.Timestamptz
 }
 

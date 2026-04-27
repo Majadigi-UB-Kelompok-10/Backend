@@ -1,4 +1,4 @@
-package endpoint_list
+package category_list
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 
 const ContextQueryTimeout = 5 * time.Second
 
-type EndpointHandler struct {
+type CategoryHandler struct {
 	Queries *db.Queries
 }
 
-func NewEndpointHandler(q *db.Queries) *EndpointHandler {
-	return &EndpointHandler{Queries: q}
+func NewCategoryHandler(q *db.Queries) *CategoryHandler {
+	return &CategoryHandler{Queries: q}
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {
@@ -33,36 +33,36 @@ func parseUUID(s string) (pgtype.UUID, error) {
 // Request DTOs
 // ---------------------------------------------------------------------
 
-type CreateEndpointRequest struct {
-	SlugName string `json:"slug_name"`
-	PageUrl  string `json:"page_url"`
+type CreateCategoryRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
-type UpdateEndpointRequest struct {
-	SlugName string `json:"slug_name"`
-	PageUrl  string `json:"page_url"`
+type UpdateCategoryRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // ---------------------------------------------------------------------
-// 01. List Endpoints
+// 01. List Categories
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) GetEndpointList(c fiber.Ctx) error {
+func (h *CategoryHandler) ListCategories(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.ListEndpoints(ctx)
+	data, err := h.Queries.ListCategories(ctx)
 	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat endpoint list", Detail: err.Error()})
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat daftar kategori", Detail: err.Error()})
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }
 
 // ---------------------------------------------------------------------
-// 02. Get Endpoint By ID
+// 02. Get Category By ID
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) GetEndpointById(c fiber.Ctx) error {
+func (h *CategoryHandler) GetCategoryById(c fiber.Ctx) error {
 	id, err := parseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
@@ -71,93 +71,103 @@ func (h *EndpointHandler) GetEndpointById(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.GetEndpointById(ctx, id)
+	data, err := h.Queries.GetCategoryById(ctx, id)
 	if err != nil {
-		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Endpoint tidak ditemukan", Detail: err.Error()})
+		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Kategori tidak ditemukan", Detail: err.Error()})
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }
 
 // ---------------------------------------------------------------------
-// 03. Get Endpoint By Slug
+// 03. Get Category By Name
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) GetEndpointBySlug(c fiber.Ctx) error {
-	slug := c.Params("slug")
+func (h *CategoryHandler) GetCategoryByName(c fiber.Ctx) error {
+	name := c.Params("name")
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.GetEndpointBySlug(ctx, slug)
+	data, err := h.Queries.GetCategoryByName(ctx, name)
 	if err != nil {
-		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Endpoint tidak ditemukan", Detail: err.Error()})
+		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Kategori tidak ditemukan", Detail: err.Error()})
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }
 
 // ---------------------------------------------------------------------
-// 04. Create Endpoint
+// 04. Create Category
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) CreateEndpoint(c fiber.Ctx) error {
-	var req CreateEndpointRequest
+func (h *CategoryHandler) CreateCategory(c fiber.Ctx) error {
+	var req CreateCategoryRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Request tidak valid", Detail: err.Error()})
 	}
-	if req.SlugName == "" || req.PageUrl == "" {
-		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "slug_name dan page_url wajib diisi"})
+	if req.Name == "" {
+		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "name wajib diisi"})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.CreateEndpoint(ctx, db.CreateEndpointParams{
-		SlugName: req.SlugName,
-		PageUrl:  req.PageUrl,
+	desc := pgtype.Text{}
+	if req.Description != "" {
+		desc = pgtype.Text{String: req.Description, Valid: true}
+	}
+
+	data, err := h.Queries.CreateCategory(ctx, db.CreateCategoryParams{
+		Name:        req.Name,
+		Description: desc,
 	})
 	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal membuat endpoint", Detail: err.Error()})
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal membuat kategori", Detail: err.Error()})
 	}
-	return c.Status(201).JSON(handlers.SuccessResponse{Pesan: "Endpoint berhasil dibuat", Data: data})
+	return c.Status(201).JSON(handlers.SuccessResponse{Pesan: "Kategori berhasil dibuat", Data: data})
 }
 
 // ---------------------------------------------------------------------
-// 05. Update Endpoint
+// 05. Update Category
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) UpdateEndpoint(c fiber.Ctx) error {
+func (h *CategoryHandler) UpdateCategory(c fiber.Ctx) error {
 	id, err := parseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
 
-	var req UpdateEndpointRequest
+	var req UpdateCategoryRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Request tidak valid", Detail: err.Error()})
 	}
-	if req.SlugName == "" || req.PageUrl == "" {
-		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "slug_name dan page_url wajib diisi"})
+	if req.Name == "" {
+		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "name wajib diisi"})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.UpdateEndpoint(ctx, db.UpdateEndpointParams{
-		EndpointListID: id,
-		SlugName:       req.SlugName,
-		PageUrl:        req.PageUrl,
+	desc := pgtype.Text{}
+	if req.Description != "" {
+		desc = pgtype.Text{String: req.Description, Valid: true}
+	}
+
+	data, err := h.Queries.UpdateCategory(ctx, db.UpdateCategoryParams{
+		CategoryListID: id,
+		Name:           req.Name,
+		Description:    desc,
 	})
 	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memperbarui endpoint", Detail: err.Error()})
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memperbarui kategori", Detail: err.Error()})
 	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Endpoint berhasil diperbarui", Data: data})
+	return c.JSON(handlers.SuccessResponse{Pesan: "Kategori berhasil diperbarui", Data: data})
 }
 
 // ---------------------------------------------------------------------
-// 06. Delete Endpoint
+// 06. Delete Category
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) DeleteEndpoint(c fiber.Ctx) error {
+func (h *CategoryHandler) DeleteCategory(c fiber.Ctx) error {
 	id, err := parseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
@@ -166,23 +176,23 @@ func (h *EndpointHandler) DeleteEndpoint(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	if err := h.Queries.DeleteEndpoint(ctx, id); err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal menghapus endpoint", Detail: err.Error()})
+	if err := h.Queries.DeleteCategory(ctx, id); err != nil {
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal menghapus kategori", Detail: err.Error()})
 	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Endpoint berhasil dihapus"})
+	return c.JSON(handlers.SuccessResponse{Pesan: "Kategori berhasil dihapus"})
 }
 
 // ---------------------------------------------------------------------
-// 07. Get All Endpoints
+// 07. Get All Categories
 // ---------------------------------------------------------------------
 
-func (h *EndpointHandler) GetAllEndpoints(c fiber.Ctx) error {
+func (h *CategoryHandler) GetAllCategories(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.GetAllEndpoints(ctx)
+	data, err := h.Queries.GetAllCategories(ctx)
 	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat semua endpoint", Detail: err.Error()})
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat semua kategori", Detail: err.Error()})
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }

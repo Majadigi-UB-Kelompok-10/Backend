@@ -8,3 +8,16 @@ sql:
         package: "db"
         out: "internal/db"
         sql_package: "pgx/v5"
+        overrides:
+          - db_type: "jsonb"
+            nullable: true
+            engine: "postgresql"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
+          - db_type: "jsonb"
+            nullable: false
+            engine: "postgresql"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"

@@ -12,7 +12,7 @@ import (
 )
 
 const addCategoryToService = `-- name: AddCategoryToService :exec
-INSERT INTO services_has_categories (service_list_id, category_list_id) 
+INSERT INTO services_has_categories (service_list_id, category_list_id)
 VALUES ($1, $2)
 `
 
@@ -24,6 +24,31 @@ type AddCategoryToServiceParams struct {
 func (q *Queries) AddCategoryToService(ctx context.Context, arg AddCategoryToServiceParams) error {
 	_, err := q.db.Exec(ctx, addCategoryToService, arg.ServiceListID, arg.CategoryListID)
 	return err
+}
+
+const getAllServicesHasCategories = `-- name: GetAllServicesHasCategories :many
+SELECT service_list_id, category_list_id, created_at FROM services_has_categories
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllServicesHasCategories(ctx context.Context) ([]ServicesHasCategory, error) {
+	rows, err := q.db.Query(ctx, getAllServicesHasCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServicesHasCategory
+	for rows.Next() {
+		var i ServicesHasCategory
+		if err := rows.Scan(&i.ServiceListID, &i.CategoryListID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCategoriesByServiceId = `-- name: ListCategoriesByServiceId :many
@@ -90,7 +115,7 @@ func (q *Queries) ListServicesByCategoryId(ctx context.Context, categoryListID p
 }
 
 const removeCategoryFromService = `-- name: RemoveCategoryFromService :exec
-DELETE FROM services_has_categories 
+DELETE FROM services_has_categories
 WHERE service_list_id = $1 AND category_list_id = $2
 `
 

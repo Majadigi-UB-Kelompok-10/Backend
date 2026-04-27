@@ -12,8 +12,8 @@ import (
 )
 
 const createIntegration = `-- name: CreateIntegration :one
-INSERT INTO integration_list (service_list_id, endpoint_list_id, title, icon_url) 
-VALUES ($1, $2, $3, $4) 
+INSERT INTO integration_list (service_list_id, endpoint_list_id, title, icon_url)
+VALUES ($1, $2, $3, $4)
 RETURNING integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at
 `
 
@@ -44,7 +44,7 @@ func (q *Queries) CreateIntegration(ctx context.Context, arg CreateIntegrationPa
 }
 
 const deleteIntegration = `-- name: DeleteIntegration :exec
-DELETE FROM integration_list 
+DELETE FROM integration_list
 WHERE integration_list_id = $1
 `
 
@@ -53,8 +53,40 @@ func (q *Queries) DeleteIntegration(ctx context.Context, integrationListID pgtyp
 	return err
 }
 
+const getAllIntegrations = `-- name: GetAllIntegrations :many
+SELECT integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at FROM integration_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllIntegrations(ctx context.Context) ([]IntegrationList, error) {
+	rows, err := q.db.Query(ctx, getAllIntegrations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntegrationList
+	for rows.Next() {
+		var i IntegrationList
+		if err := rows.Scan(
+			&i.IntegrationListID,
+			&i.ServiceListID,
+			&i.EndpointListID,
+			&i.Title,
+			&i.IconUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getIntegrationById = `-- name: GetIntegrationById :one
-SELECT integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at FROM integration_list 
+SELECT integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at FROM integration_list
 WHERE integration_list_id = $1 LIMIT 1
 `
 
@@ -73,8 +105,8 @@ func (q *Queries) GetIntegrationById(ctx context.Context, integrationListID pgty
 }
 
 const listIntegrationsByServiceId = `-- name: ListIntegrationsByServiceId :many
-SELECT integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at FROM integration_list 
-WHERE service_list_id = $1 
+SELECT integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at FROM integration_list
+WHERE service_list_id = $1
 ORDER BY created_at DESC
 `
 
@@ -106,9 +138,9 @@ func (q *Queries) ListIntegrationsByServiceId(ctx context.Context, serviceListID
 }
 
 const updateIntegration = `-- name: UpdateIntegration :one
-UPDATE integration_list 
-SET endpoint_list_id = $2, title = $3, icon_url = $4 
-WHERE integration_list_id = $1 
+UPDATE integration_list
+SET endpoint_list_id = $2, title = $3, icon_url = $4
+WHERE integration_list_id = $1
 RETURNING integration_list_id, service_list_id, endpoint_list_id, title, icon_url, created_at
 `
 

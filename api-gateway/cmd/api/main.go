@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
-	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
+	gatewayAdmin "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers/gateway_admin"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/routes"
 	init_helper "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/init_helper"
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/compress"
+	"github.com/gofiber/fiber/v3/middleware/etag"
 	"github.com/jackc/pgx/v5/pgxpool"
-
 )
 
 func main() {
@@ -37,19 +38,22 @@ func main() {
 		JSONDecoder: sonic.Unmarshal,
 	})
 
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
+	app.Use(etag.New(etag.ConfigDefault))
+
 	init_helper.InitializeFiberAppConfig(app, os.Getenv("ALLOWED_ORIGINS"))
 
 	queries := db.New(pool)
 
-	
 	if err := routes.RefreshEndpoints(context.Background(), queries); err != nil {
 		log.Printf("Peringatan: Gagal load rute awal: %v\n", err)
 	}
 
-
-	adminHandler := handlers.NewGatewayAdminHandler(queries)
+	adminHandler := gatewayAdmin.NewGatewayAdminHandler(queries)
 	app.Post("/api/v1/admin/gateway/sync", adminHandler.SyncNow)
 
+	routes.SetupPublicRoutes(app, queries)
+	routes.SetupAdminRoutes(app, queries)
 	routes.SetupDynamicEndpoint(app)
 	fmt.Println("Dynamic endpoints configured")
 
@@ -75,15 +79,13 @@ func gracefulShutdownListener() {
 
 	fmt.Println("\nGraceful Shutdown for other services...")
 
-
 	fmt.Println("Graceful shutdown complete")
 }
-
 
 func startRealtimeObserver(pool *pgxpool.Pool, queries *db.Queries) {
 	fmt.Println("Observer Real-time dijalankan...")
 
-	for { 
+	for {
 		ctx := context.Background()
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
@@ -105,19 +107,19 @@ func startRealtimeObserver(pool *pgxpool.Pool, queries *db.Queries) {
 		for {
 			ctxWait, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, err := conn.Conn().WaitForNotification(ctxWait)
-			cancel() 
+			cancel()
 
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					if pingErr := conn.Ping(ctx); pingErr != nil {
 						fmt.Printf("Koneksi mati diam-diam oleh Docker (Ping gagal). Reconnecting...\n")
-						break 
+						break
 					}
 					continue
 				}
 
 				fmt.Printf("Koneksi terputus tiba-tiba: %v. Reconnecting...\n", err)
-				break 
+				break
 			}
 
 			fmt.Println("Sinyal UPDATE diterima! Memperbarui rute di RAM...")
@@ -127,6 +129,6 @@ func startRealtimeObserver(pool *pgxpool.Pool, queries *db.Queries) {
 		}
 
 		conn.Release()
-		time.Sleep(2 * time.Second) 
+		time.Sleep(2 * time.Second)
 	}
 }

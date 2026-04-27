@@ -7,13 +7,14 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createOperational = `-- name: CreateOperational :one
-INSERT INTO operational_list (service_list_id, service_url, address, operational_hour, social_media) 
-VALUES ($1, $2, $3, $4, $5) 
+INSERT INTO operational_list (service_list_id, service_url, address, operational_hour, social_media)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING operational_list_id, service_list_id, service_url, address, operational_hour, social_media, created_at
 `
 
@@ -21,8 +22,8 @@ type CreateOperationalParams struct {
 	ServiceListID   pgtype.UUID
 	ServiceUrl      string
 	Address         pgtype.Text
-	OperationalHour []byte
-	SocialMedia     []byte
+	OperationalHour json.RawMessage
+	SocialMedia     json.RawMessage
 }
 
 func (q *Queries) CreateOperational(ctx context.Context, arg CreateOperationalParams) (OperationalList, error) {
@@ -47,7 +48,7 @@ func (q *Queries) CreateOperational(ctx context.Context, arg CreateOperationalPa
 }
 
 const deleteOperational = `-- name: DeleteOperational :exec
-DELETE FROM operational_list 
+DELETE FROM operational_list
 WHERE service_list_id = $1
 `
 
@@ -56,8 +57,41 @@ func (q *Queries) DeleteOperational(ctx context.Context, serviceListID pgtype.UU
 	return err
 }
 
+const getAllOperationals = `-- name: GetAllOperationals :many
+SELECT operational_list_id, service_list_id, service_url, address, operational_hour, social_media, created_at FROM operational_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllOperationals(ctx context.Context) ([]OperationalList, error) {
+	rows, err := q.db.Query(ctx, getAllOperationals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OperationalList
+	for rows.Next() {
+		var i OperationalList
+		if err := rows.Scan(
+			&i.OperationalListID,
+			&i.ServiceListID,
+			&i.ServiceUrl,
+			&i.Address,
+			&i.OperationalHour,
+			&i.SocialMedia,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOperationalByServiceId = `-- name: GetOperationalByServiceId :one
-SELECT operational_list_id, service_list_id, service_url, address, operational_hour, social_media, created_at FROM operational_list 
+SELECT operational_list_id, service_list_id, service_url, address, operational_hour, social_media, created_at FROM operational_list
 WHERE service_list_id = $1 LIMIT 1
 `
 
@@ -77,9 +111,9 @@ func (q *Queries) GetOperationalByServiceId(ctx context.Context, serviceListID p
 }
 
 const updateOperational = `-- name: UpdateOperational :one
-UPDATE operational_list 
-SET service_url = $2, address = $3, operational_hour = $4, social_media = $5 
-WHERE service_list_id = $1 
+UPDATE operational_list
+SET service_url = $2, address = $3, operational_hour = $4, social_media = $5
+WHERE service_list_id = $1
 RETURNING operational_list_id, service_list_id, service_url, address, operational_hour, social_media, created_at
 `
 
@@ -87,8 +121,8 @@ type UpdateOperationalParams struct {
 	ServiceListID   pgtype.UUID
 	ServiceUrl      string
 	Address         pgtype.Text
-	OperationalHour []byte
-	SocialMedia     []byte
+	OperationalHour json.RawMessage
+	SocialMedia     json.RawMessage
 }
 
 func (q *Queries) UpdateOperational(ctx context.Context, arg UpdateOperationalParams) (OperationalList, error) {
