@@ -1,10 +1,11 @@
 package cache
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bytedance/sonic" 
 )
 
 type Cache interface {
@@ -50,7 +51,7 @@ func (c *SimpleCache) Set(key string, val interface{}, ttl time.Duration) {
 	if v, ok := val.([]byte); ok {
 		data = v
 	} else {
-		if jsonData, err := json.Marshal(val); err == nil {
+		if jsonData, err := sonic.Marshal(val); err == nil {
 			data = jsonData
 		} else {
 			return
