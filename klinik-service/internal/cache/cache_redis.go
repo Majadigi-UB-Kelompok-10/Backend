@@ -2,10 +2,11 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
+	"log/slog" 
 
+	"github.com/bytedance/sonic" 
 	"github.com/redis/go-redis/v9"
 )
 
@@ -50,7 +51,6 @@ func (r *RedisCache) Get(key string) ([]byte, bool) {
 	return val, true
 }
 
-// Set sekarang menerima TTL!
 func (r *RedisCache) Set(key string, val interface{}, ttl time.Duration) {
 	ctx, cancel := r.contextWithTimeout()
 	defer cancel()
@@ -61,15 +61,15 @@ func (r *RedisCache) Set(key string, val interface{}, ttl time.Duration) {
 	if v, ok := val.([]byte); ok {
 		data = v
 	} else {
-		data, err = json.Marshal(val)
+		data, err = sonic.Marshal(val)
 		if err != nil {
-			fmt.Printf("[REDIS ERROR] Gagal marshal val untuk key %s: %v\n", key, err)
+			slog.Error("Gagal marshal val Redis", slog.String("key", key), slog.Any("error", err))
 			return
 		}
 	}
 
 	if err := r.client.Set(ctx, key, data, ttl).Err(); err != nil {
-		fmt.Printf("[REDIS ERROR] Gagal simpan key %s: %v\n", key, err)
+		slog.Error("Gagal simpan key Redis", slog.String("key", key), slog.Any("error", err))
 	}
 }
 
@@ -81,12 +81,12 @@ func (r *RedisCache) InvalidatePattern(pattern string) {
 	for {
 		keys, nextCursor, err := r.client.Scan(ctx, cursor, "*"+pattern+"*", 100).Result()
 		if err != nil {
-			fmt.Printf("[REDIS ERROR] Scan InvalidatePattern gagal: %v\n", err)
+			slog.Error("Scan InvalidatePattern gagal", slog.Any("error", err))
 			return
 		}
 
 		if len(keys) > 0 {
-			r.client.Unlink(ctx, keys...)
+			r.client.Unlink(ctx, keys...) 
 		}
 
 		cursor = nextCursor
@@ -108,7 +108,7 @@ func (r *RedisCache) DeleteByPrefix(prefix string) {
 		}
 
 		if len(keys) > 0 {
-			r.client.Unlink(ctx, keys...) 
+			r.client.Unlink(ctx, keys...) // 🚀 Mempertahankan Unlink
 		}
 
 		cursor = nextCursor
