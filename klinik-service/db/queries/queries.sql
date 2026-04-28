@@ -148,4 +148,3 @@ FROM hoax_news h
 JOIN hoax_categories c ON h.category_id = c.id
 WHERE h.slug = sqlc.arg('slug')
 LIMIT 1;
-
