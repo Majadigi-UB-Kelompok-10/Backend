@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -20,11 +22,15 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
+	// API Gateway Registry Majadigi
 	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
+	// 🚀 IMPORT MURNI KLINIK
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
 	"github.com/farildzaky/klinik-service/internal/handlers"
@@ -32,10 +38,19 @@ import (
 )
 
 func maskSensitiveData(msg string) string {
-	if strings.Contains(msg, "postgres://") {
-		return "database connection error (credentials masked)"
+	re := regexp.MustCompile(`(postgres|redis|cloudinary)://([^:]+):([^@]+)@`)
+	masked := re.ReplaceAllString(msg, `$1://$2:***@`)
+
+	if strings.Contains(masked, "postgres://") {
+		return "Database connection error (credentials masked): " + masked
 	}
-	return msg
+	if strings.Contains(masked, "redis://") {
+		return "Redis connection error (credentials masked): " + masked
+	}
+	if strings.Contains(masked, "cloudinary://") {
+		return "Cloudinary error (credentials masked): " + masked
+	}
+	return masked
 }
 
 func initializeCache() {
@@ -43,7 +58,7 @@ func initializeCache() {
 	if redisURL != "" {
 		redisCache, err := cache.NewRedisCache(redisURL)
 		if err != nil {
-			slog.Error("Gagal inisiasi Redis", slog.String("error", err.Error()))
+			slog.Error("Gagal inisiasi Redis", slog.String("error", maskSensitiveData(err.Error())))
 			os.Exit(1)
 		}
 		cache.GlobalCache = redisCache
@@ -90,6 +105,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 🚀 FIX ERROR 1: Tracer di pgx v5 ada di dalam ConnConfig
+	config.ConnConfig.Tracer = &tracelog.TraceLog{
+		Logger: tracelog.LoggerFunc(func(ctx context.Context, level tracelog.LogLevel, msg string, data map[string]interface{}) {
+			if msg == "Query" {
+				slog.Info("DB Query Executed", slog.Any("sql", data["sql"]))
+			}
+		}),
+		LogLevel: tracelog.LogLevelInfo,
+	}
+
 	config.MaxConns = 30
 	config.MinConns = 5
 	config.MaxConnLifetime = 1 * time.Hour
@@ -102,7 +127,6 @@ func main() {
 	}
 	slog.Info("PostgreSQL Terhubung")
 
-
 	initializeCache()
 
 	var cld *cloudinary.Cloudinary
@@ -111,7 +135,7 @@ func main() {
 		if err == nil {
 			slog.Info("Cloudinary Initialized")
 		} else {
-			slog.Error("Gagal inisialisasi Cloudinary", slog.String("err", err.Error()))
+			slog.Error("Gagal inisialisasi Cloudinary", slog.String("err", maskSensitiveData(err.Error())))
 		}
 	} else {
 		slog.Warn("CLOUDINARY_URL kosong, upload gambar akan gagal")
@@ -124,10 +148,22 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		ErrorHandler: func(c fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			var e *fiber.Error
+			if errors.As(err, &e) {
+				code = e.Code
+			}
+			slog.Error("Global Error", slog.String("error", err.Error()), slog.String("path", c.Path()))
+
+			return c.Status(code).JSON(handlers.ErrorResponse{
+				Code:    "ERR_INTERNAL",
+				Message: "Terjadi kesalahan pada server",
+			})
+		},
 	})
 
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
-
 	app.Use(helmet.New(helmet.Config{
 		XSSProtection:      "1; mode=block",
 		ContentTypeNosniff: "nosniff",
@@ -135,9 +171,9 @@ func main() {
 		HSTSMaxAge:         31536000,
 		HSTSPreloadEnabled: true,
 	}))
-
+	app.Use(requestid.New())
 	app.Use(logger.New(logger.Config{
-		Format: `{"time":"${time}", "level":"INFO", "method":"${method}", "path":"${path}", "status":${status}, "latency":"${latency}"}` + "\n",
+		Format: `{"time":"${time}", "level":"INFO", "method":"${method}", "path":"${path}", "status":${status}, "latency":"${latency}", "reqid":"${locals:requestid}"}` + "\n",
 	}))
 
 	app.Use(cors.New(cors.Config{
@@ -150,6 +186,7 @@ func main() {
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
+	// 🚀 FIX ERROR 2: Pakai 'Action' (string), bukan 'Details' (map)
 	app.Use(limiter.New(limiter.Config{
 		Max:        120,
 		Expiration: 1 * time.Minute,
@@ -162,32 +199,7 @@ func main() {
 		},
 	}))
 
-	app.Get("/health", func(c fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		dbStatus, redisStatus := "OK", "OK"
-		if errPing := pool.Ping(ctx); errPing != nil {
-			dbStatus = "DOWN"
-		}
-		if cache.GlobalCache == nil {
-			redisStatus = "DOWN"
-		}
-
-		status, httpCode := "healthy", 200
-		if dbStatus == "DOWN" || redisStatus == "DOWN" {
-			status, httpCode = "degraded", 503
-		}
-
-		return c.Status(httpCode).JSON(fiber.Map{
-			"status":    status,
-			"database":  dbStatus,
-			"redis":     redisStatus,
-			"timestamp": time.Now().Format(time.RFC3339),
-			"service":   "klinik-hoaks-api",
-		})
-	})
-
+	// 🚀 FIX ERROR 3 & 4: Hapus Siskaperbapo, pakai HoaxHandler KLINIK!
 	queries := db.New(pool)
 	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld)
 	routes.SetupRoutes(app, hoaxHandler)
@@ -196,9 +208,10 @@ func main() {
 
 	gatewayDBUrl := os.Getenv("GATEWAY_DATABASE_URL")
 	registry.AutoRegister(gatewayDBUrl, "klinik", "http://klinik-api:8080/api/v1")
-    slog.Info("Proses AutoRegister API ke Gateway telah dipanggil")
+	slog.Info("Proses AutoRegister API ke Gateway telah dipanggil")
 
 	go hoaxHandler.CacheWarmup()
+
 	go func() {
 		fmt.Printf("\nKlinik Hoaks Service (v1.0) berjalan di port :%s\n", port)
 		if err := app.Listen(":" + port); err != nil && err.Error() != "shutting down" {
