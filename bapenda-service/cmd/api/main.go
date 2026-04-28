@@ -367,7 +367,6 @@ func main() {
 		WriteTimeout:          15 * time.Second,
 		IdleTimeout:           60 * time.Second,
 		BodyLimit:             cfg.BodyLimitBytes,
-		DisableStartupMessage: true,
 		ErrorHandler:          globalErrorHandler(cfg),
 	})
 
@@ -397,10 +396,12 @@ func main() {
 	// Start HTTP server
 	serverErr := make(chan error, 1)
 	go func() {
-		slog.Info("listening", slog.String("addr", ":"+cfg.Port))
-		if err := app.Listen(":" + cfg.Port); err != nil {
-			serverErr <- err
-		}
+    slog.Info("listening", slog.String("addr", ":"+cfg.Port))
+    if err := app.Listen(":"+cfg.Port, fiber.ListenConfig{
+        DisableStartupMessage: true,
+    }); err != nil {
+        serverErr <- err
+    }
 	}()
 
 	// Tunggu signal atau error
