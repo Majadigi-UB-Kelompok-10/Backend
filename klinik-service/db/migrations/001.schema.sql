@@ -27,13 +27,12 @@ CREATE TABLE hoax_reports (
     CONSTRAINT uq_hoax_ticket UNIQUE (ticket_number)
 );
 
--- 3. TABEL BERITA PUBLIKASI
 CREATE TABLE hoax_news (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     report_id       UUID REFERENCES hoax_reports(id) ON DELETE SET NULL,
     category_id     UUID NOT NULL REFERENCES hoax_categories(id) ON DELETE RESTRICT,
     title           VARCHAR(255) NOT NULL,
-    slug VARCHAR(255) UNIQUE NOT NULL,
+    slug            VARCHAR(255) UNIQUE NOT NULL,
     description     TEXT NOT NULL,
     reference_link  VARCHAR(255),
     image_url       VARCHAR(255) NOT NULL,
@@ -47,14 +46,14 @@ CREATE TABLE hoax_news (
 );
 
 
-
 CREATE INDEX idx_hoax_reports_ticket ON hoax_reports(ticket_number);
-CREATE INDEX idx_hoax_news_category ON hoax_news(category_id);
-CREATE INDEX idx_hoax_news_published ON hoax_news(published_at DESC);
+
+CREATE INDEX idx_hoax_reports_status_time ON hoax_reports(status, created_at DESC);
+CREATE INDEX idx_hoax_news_category_time ON hoax_news(category_id, published_at DESC);
 
 CREATE INDEX idx_hoax_news_title_trgm ON hoax_news USING GIN (title gin_trgm_ops);
-
 CREATE INDEX idx_hoax_news_search ON hoax_news USING GIN (search_vector);
+
 
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
