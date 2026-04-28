@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'dev/**'
+  pull_request:
+    branches:
+      - main
+      - 'dev/**'
+
+jobs:
+
+  detect:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway:
+              - 'api-gateway/**'
+            bapenda-service:
+              - 'bapenda-service/**'
+            klinik-service:
+              - 'klinik-service/**'
+            sidita-service:
+              - 'sidita-service/**'
+            siskaperbapo-service:
+              - 'siskaperbapo-service/**'
+            user-service:
+              - 'user-service/**'
+
+
+  build:
+    name: Build ${{ matrix.service }}
+    needs: detect
+    if: ${{ needs.detect.outputs.services != '[]' && needs.detect.outputs.services != '' }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect.outputs.services) }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: '${{ matrix.service }}/go.mod'
+          cache: true
+          cache-dependency-path: '${{ matrix.service }}/go.sum'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Build binary
+        run: go build -o bin/api ./cmd/api
+
+      - name: Verify binary
+        run: ls -lh bin/api
