@@ -17,15 +17,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"golang.org/x/sync/errgroup" 
 )
 
 const (
 	ContextQueryTimeout  = 5 * time.Second
 	ContextUploadTimeout = 15 * time.Second
 
-	maxImageSizeBytes = 2 * 1024 * 1024 // 2MB
+	maxImageSizeBytes = 2 * 1024 * 1024 
 )
-
 
 type HoaxHandler struct {
 	Queries *db.Queries
@@ -48,7 +48,6 @@ func pgTextToStr(t pgtype.Text) string {
 	return ""
 }
 
-
 func pgUUIDToStr(u pgtype.UUID) string {
 	if !u.Valid {
 		return ""
@@ -66,7 +65,6 @@ func parseUUID(id string) (pgtype.UUID, error) {
 // =============================================================================
 // IMAGE UPLOAD — Cloudinary
 // =============================================================================
-
 
 func (h *HoaxHandler) uploadImageReal(ctx context.Context, fileHeader *multipart.FileHeader, folderName string) (string, error) {
 	if h.Cld == nil {
@@ -109,7 +107,6 @@ func (h *HoaxHandler) uploadImageReal(ctx context.Context, fileHeader *multipart
 // =============================================================================
 // EMAIL — SendGrid async with panic recovery
 // =============================================================================
-
 
 func sendEmailAsync(toEmail, name, ticket, status string) {
 	go func() {
@@ -172,7 +169,7 @@ func sendEmailAsync(toEmail, name, ticket, status string) {
 }
 
 // =============================================================================
-// CACHE WARMUP — pre-load data populer pas startup
+// CACHE WARMUP 
 // =============================================================================
 
 func (h *HoaxHandler) CacheWarmup() {
@@ -182,7 +179,14 @@ func (h *HoaxHandler) CacheWarmup() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if statsData, err := h.Queries.GetDashboardStats(ctx); err == nil {
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		statsData, err := h.Queries.GetDashboardStats(gCtx)
+		if err != nil {
+			return fmt.Errorf("warmup stats: %w", err)
+		}
+
 		responseData := make([]DashboardStatItem, 0, len(statsData))
 		for _, row := range statsData {
 			responseData = append(responseData, DashboardStatItem{
@@ -198,17 +202,23 @@ func (h *HoaxHandler) CacheWarmup() {
 			SuccessResponse{Pesan: "Sukses", Data: responseData},
 			CacheTTLList,
 		)
-	} else {
-		slog.Warn("cache.warmup.stats_failed", slog.String("err", err.Error()))
-	}
-
-	newsData, errNews := h.Queries.GetPublicNews(ctx, db.GetPublicNewsParams{
-		LimitData:  10,
-		OffsetData: 0,
+		return nil
 	})
-	totalNews, errCount := h.Queries.CountPublicNews(ctx)
 
-	if errNews == nil && errCount == nil {
+	g.Go(func() error {
+		newsData, errNews := h.Queries.GetPublicNews(gCtx, db.GetPublicNewsParams{
+			LimitData:  10,
+			OffsetData: 0,
+		})
+		if errNews != nil {
+			return fmt.Errorf("warmup news data: %w", errNews)
+		}
+
+		totalNews, errCount := h.Queries.CountPublicNews(gCtx)
+		if errCount != nil {
+			return fmt.Errorf("warmup news count: %w", errCount)
+		}
+
 		responseNews := make([]PublicNewsItem, 0, len(newsData))
 		for _, row := range newsData {
 			responseNews = append(responseNews, PublicNewsItem{
@@ -228,14 +238,18 @@ func (h *HoaxHandler) CacheWarmup() {
 			Pagination: &PaginationMeta{Page: 1, Limit: 10, Total: totalNews},
 		}
 		cache.GlobalCache.Set("hoax:news:public:q_:p1:l10", res, CacheTTLList)
-	} else {
-		slog.Warn("cache.warmup.news_failed",
-			slog.Any("err_news", errNews),
-			slog.Any("err_count", errCount),
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		slog.Warn("cache.warmup.partial_failure",
+			slog.String("err", err.Error()),
+			slog.String("note", "service tetap jalan, cache akan diisi on-demand"),
 		)
+		return
 	}
 
-	slog.Info("cache.warmup.done",
+	slog.Info("cache.warmup.success",
 		slog.String("duration", time.Since(startTime).String()),
 	)
 }
