@@ -112,10 +112,6 @@ LIMIT sqlc.arg('limit_data') OFFSET sqlc.arg('offset_data');
 -- name: CountKendaraanPajak :one
 SELECT COUNT(*) FROM kendaraan_pajak;
 
--- name: EstimateKendaraanPajakCount :one
-SELECT COALESCE(reltuples::bigint, 0) AS approx_count
-FROM pg_class
-WHERE relname = 'kendaraan_pajak';
 
 -- =============================================================================
 -- ADMIN: MASTER NJKB
@@ -155,7 +151,3 @@ LIMIT sqlc.arg('limit_data') OFFSET sqlc.arg('offset_data');
 -- name: CountMasterNjkb :one
 SELECT COUNT(*) FROM master_njkb;
 
--- name: EstimateMasterNjkbCount :one
-SELECT COALESCE(reltuples::bigint, 0) AS approx_count
-FROM pg_class
-WHERE relname = 'master_njkb';

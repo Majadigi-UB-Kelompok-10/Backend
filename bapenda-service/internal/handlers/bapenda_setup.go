@@ -22,37 +22,45 @@ func NewBapendaHandler(q *db.Queries) *BapendaHandler {
 }
 
 func (h *BapendaHandler) RunCacheWarmup() {
-	slog.Info("Memulai Cache Warmup...")
+	slog.Info("cache.warmup.start")
 	startTime := time.Now()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		jenisData, err := h.Queries.GetDistinctJenis(ctx)
+		jenisData, err := h.Queries.GetDistinctJenis(gCtx)
 		if err != nil {
-			return fmt.Errorf("gagal ambil jenis kendaraan: %v", err)
+			return fmt.Errorf("warmup jenis: %w", err)
 		}
-		res := SuccessResponse{Pesan: "Sukses", Data: jenisData}
-		cache.GlobalCache.Set("dropdown:jenis", res)
+		cache.GlobalCache.SetWithTTL(
+			"dropdown:jenis",
+			SuccessResponse{Pesan: "Sukses", Data: jenisData},
+			CacheTTLStatic,
+		)
 		return nil
 	})
 
 	g.Go(func() error {
-		tarifData, err := h.Queries.GetAllTarifPKB(ctx)
+		tarifData, err := h.Queries.GetAllTarifPKB(gCtx)
 		if err != nil {
-			return fmt.Errorf("gagal ambil tarif PKB: %v", err)
+			return fmt.Errorf("warmup tarif: %w", err)
 		}
-		cache.GlobalCache.Set("master:tarif_pkb", tarifData)
+		cache.GlobalCache.SetWithTTL("master:tarif_pkb", tarifData, CacheTTLStatic)
 		return nil
 	})
 
 	if err := g.Wait(); err != nil {
-		slog.Warn("Peringatan: Cache Warmup selesai dengan error (Aplikasi tetap berjalan)", slog.String("error", err.Error()))
+		slog.Warn("cache.warmup.partial_failure",
+			slog.String("err", err.Error()),
+			slog.String("note", "service tetap jalan, cache akan diisi on-demand"),
+		)
 		return
 	}
 
-	slog.Info("Cache Warmup Berhasil", slog.String("waktu", time.Since(startTime).String()))
+	slog.Info("cache.warmup.success",
+		slog.String("duration", time.Since(startTime).String()),
+	)
 }
