@@ -526,18 +526,33 @@ func globalErrorHandler(cfg *Config) fiber.ErrorHandler {
 // HEALTH ENDPOINTS — split liveness vs readiness (K8s best practice)
 // =============================================================================
 func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
-	// Liveness — proses jalan? (selalu 200 kecuali crash)
+	type livenessResponse struct {
+		Status  string `json:"status"`
+		Service string `json:"service"`
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Uptime  string `json:"uptime"`
+	}
+
+	type readinessResponse struct {
+		Status    string    `json:"status"`
+		Database  string    `json:"database"`
+		Cache     string    `json:"cache"`
+		Timestamp time.Time `json:"timestamp"`
+		Service   string    `json:"service"`
+		Commit    string    `json:"commit"`
+	}
+
 	app.Get("/health", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status":  "alive",
-			"service": serviceName,
-			"version": version,
-			"commit":  commit,
-			"uptime":  time.Since(startedAt).String(),
+		return c.JSON(livenessResponse{
+			Status:  "alive",
+			Service: serviceName,
+			Version: version,
+			Commit:  commit,
+			Uptime:  time.Since(startedAt).String(),
 		})
 	})
 
-	// Readiness — siap terima traffic? (DB + cache reachable)
 	app.Get("/ready", func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -557,13 +572,69 @@ func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
 			status, overall = fiber.StatusServiceUnavailable, "not_ready"
 		}
 
-		return c.Status(status).JSON(fiber.Map{
-			"status":    overall,
-			"database":  dbStatus,
-			"cache":     cacheStatus,
-			"timestamp": time.Now(),
-			"service":   serviceName,
-			"commit":    commit,
+		return c.Status(status).JSON(readinessResponse{
+			Status:    overall,
+			Database:  dbStatus,
+			Cache:     cacheStatus,
+			Timestamp: time.Now(),
+			Service:   serviceName,
+			Commit:    commit,
+		})
+	})
+}func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
+	type livenessResponse struct {
+		Status  string `json:"status"`
+		Service string `json:"service"`
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Uptime  string `json:"uptime"`
+	}
+
+	type readinessResponse struct {
+		Status    string    `json:"status"`
+		Database  string    `json:"database"`
+		Cache     string    `json:"cache"`
+		Timestamp time.Time `json:"timestamp"`
+		Service   string    `json:"service"`
+		Commit    string    `json:"commit"`
+	}
+
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.JSON(livenessResponse{
+			Status:  "alive",
+			Service: serviceName,
+			Version: version,
+			Commit:  commit,
+			Uptime:  time.Since(startedAt).String(),
+		})
+	})
+
+	app.Get("/ready", func(c fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		dbStatus, cacheStatus, ready := "ok", "ok", true
+
+		if err := pool.Ping(ctx); err != nil {
+			dbStatus = "down"
+			ready = false
+		}
+		if cache.GlobalCache == nil {
+			cacheStatus = "degraded"
+		}
+
+		status, overall := fiber.StatusOK, "ready"
+		if !ready {
+			status, overall = fiber.StatusServiceUnavailable, "not_ready"
+		}
+
+		return c.Status(status).JSON(readinessResponse{
+			Status:    overall,
+			Database:  dbStatus,
+			Cache:     cacheStatus,
+			Timestamp: time.Now(),
+			Service:   serviceName,
+			Commit:    commit,
 		})
 	})
 }
