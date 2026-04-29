@@ -9,7 +9,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Auto-update updated_at column on UPDATE.
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
