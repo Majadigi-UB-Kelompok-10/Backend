@@ -5,58 +5,84 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
+
 	"github.com/farildzaky/bapenda-service/internal/handlers"
 )
 
-func SetupRoutes(app *fiber.App, bapendaHandler *handlers.BapendaHandler) {
+func SetupRoutes(app *fiber.App, h *handlers.BapendaHandler) {
 	api := app.Group("/api/v1")
 
+
+
+	// Search/read endpoints: more permissive (50/min)
+	searchLimiter := limiter.New(limiter.Config{
+		Max:        50,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: rateLimitResponse,
+	})
+
+	// Mutation endpoints (POST/PUT/DELETE): stricter (30/min)
 	actionLimiter := limiter.New(limiter.Config{
 		Max:        30,
 		Expiration: 1 * time.Minute,
-		LimitReached: func(c fiber.Ctx) error {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"error": "Terlalu banyak request. Silakan tunggu 1 menit.",
-			})
+		KeyGenerator: func(c fiber.Ctx) string {
+			return c.IP()
 		},
+		LimitReached: rateLimitResponse,
 	})
+
+
 
 	api.Get("/", func(c fiber.Ctx) error {
-		return c.SendString("Bapenda API v1 Active")
+		return c.JSON(handlers.SuccessResponse{
+			Pesan: "Bapenda API v1 Active",
+		})
 	})
 
-	// ==========================================
-	// 1. INFO PAJAK
-	// ==========================================
-	api.Post("/pajak/info", actionLimiter, bapendaHandler.GetInfoPajak)
+	// =========================================================================
+	// PUBLIC: CEK PAJAK
+	// =========================================================================
 
-	// ==========================================
-	// 2. NILAI JUAL 
-	// ==========================================
+	api.Post("/pajak/info", actionLimiter, h.GetInfoPajak)
+
+	// =========================================================================
+	// PUBLIC: NJKB / KALKULATOR PAJAK
+	// =========================================================================
+
 	njkb := api.Group("/njkb")
-	njkb.Get("/jenis", bapendaHandler.GetDropdownJenis)
-	njkb.Get("/merk", bapendaHandler.GetDropdownMerk)
-	njkb.Get("/model", bapendaHandler.GetDropdownModel)
-	njkb.Get("/tipe", bapendaHandler.GetDropdownTipe)
-	njkb.Get("/tahun", bapendaHandler.GetDropdownTahun)
-	
-	njkb.Post("/kalkulasi", actionLimiter, bapendaHandler.HitungKalkulasiNJKB)
+	njkb.Get("/jenis", searchLimiter, h.GetDropdownJenis)
+	njkb.Get("/merk", searchLimiter, h.GetDropdownMerk)
+	njkb.Get("/model", searchLimiter, h.GetDropdownModel)
+	njkb.Get("/tipe", searchLimiter, h.GetDropdownTipe)
+	njkb.Get("/tahun", searchLimiter, h.GetDropdownTahun)
+	njkb.Post("/kalkulasi", actionLimiter, h.HitungKalkulasiNJKB)
 
-	// ==========================================
-	// 3. ADMIN ENDPOINTS 
-	// ==========================================
+
+
 	admin := api.Group("/admin")
-    
-    admin.Get("/pajak", bapendaHandler.GetAllInfoPajakAdmin)      
-    admin.Get("/pajak/:plat", bapendaHandler.GetDetailPajakAdmin) 
-    admin.Post("/pajak", bapendaHandler.CreateInfoPajak)          
-    admin.Put("/pajak/:plat", bapendaHandler.UpdateInfoPajak)     
-    admin.Delete("/pajak/:plat", bapendaHandler.DeleteInfoPajak)  
-    
-	admin.Get("/njkb", bapendaHandler.GetAllMasterNjkbAdmin)
-    admin.Get("/njkb/:id", bapendaHandler.GetDetailMasterNjkbAdmin)
-    admin.Post("/njkb", bapendaHandler.CreateMasterNjkb)
-    admin.Put("/njkb/:id", bapendaHandler.UpdateMasterNjkb)
-    admin.Delete("/njkb/:id", bapendaHandler.DeleteMasterNjkb)
 
+	// Pajak Kendaraan
+	admin.Get("/pajak", searchLimiter, h.GetAllInfoPajakAdmin)
+	admin.Get("/pajak/:plat", searchLimiter, h.GetDetailPajakAdmin)
+	admin.Post("/pajak", actionLimiter, h.CreateInfoPajak)
+	admin.Put("/pajak/:plat", actionLimiter, h.UpdateInfoPajak)
+	admin.Delete("/pajak/:plat", actionLimiter, h.DeleteInfoPajak)
+
+	// Master NJKB
+	admin.Get("/njkb", searchLimiter, h.GetAllMasterNjkbAdmin)
+	admin.Get("/njkb/:id", searchLimiter, h.GetDetailMasterNjkbAdmin)
+	admin.Post("/njkb", actionLimiter, h.CreateMasterNjkb)
+	admin.Put("/njkb/:id", actionLimiter, h.UpdateMasterNjkb)
+	admin.Delete("/njkb/:id", actionLimiter, h.DeleteMasterNjkb)
+}
+
+func rateLimitResponse(c fiber.Ctx) error {
+	return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+		Code:    "ERR_RATE_LIMIT",
+		Message: "Terlalu banyak request",
+		Action:  "Silakan tunggu 1 menit sebelum mencoba lagi",
+	})
 }

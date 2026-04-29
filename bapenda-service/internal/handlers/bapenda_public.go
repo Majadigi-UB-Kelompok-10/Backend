@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"strings"
 
 	"github.com/farildzaky/bapenda-service/internal/cache"
 	"github.com/farildzaky/bapenda-service/internal/db"
+	"github.com/farildzaky/bapenda-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -17,23 +17,31 @@ import (
 // =============================================================================
 
 func (h *BapendaHandler) GetInfoPajak(c fiber.Ctx) error {
-	platNomor := strings.ToUpper(strings.ReplaceAll(c.FormValue("plat_nomor"), " ", ""))
-	nomorRangka := strings.ToUpper(strings.TrimSpace(c.FormValue("nomor_rangka")))
+	rawPlat := c.FormValue("plat_nomor")
+	rawRangka := c.FormValue("nomor_rangka")
 
-	slog.Info("cek_pajak.request", slog.String("plat_nomor", platNomor))
-
-	// Validasi
-	if platNomor == "" || len(nomorRangka) != 5 {
+	// Validate + sanitize
+	platNomor, ve := utils.ValidatePlatNomor(rawPlat)
+	if ve != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION_FAILED",
 			Message: "Input tidak valid",
 			Action:  "Harap perbaiki data input",
-			Errors: []FieldError{
-				{Field: "plat_nomor", Message: "Plat nomor wajib diisi"},
-				{Field: "nomor_rangka", Message: "Nomor rangka harus 5 digit terakhir"},
-			},
+			Errors:  []FieldError{{Field: ve.Field, Message: ve.Message}},
 		})
 	}
+
+	nomorRangka, ve := utils.ValidateNomorRangka(rawRangka)
+	if ve != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION_FAILED",
+			Message: "Input tidak valid",
+			Action:  "Harap perbaiki data input",
+			Errors:  []FieldError{{Field: ve.Field, Message: ve.Message}},
+		})
+	}
+
+	slog.Info("cek_pajak.request", slog.String("plat_nomor", platNomor))
 
 	cacheKey := fmt.Sprintf("pajak:info:%s:%s", platNomor, nomorRangka)
 	if respondCached(c, cacheKey) {
@@ -83,6 +91,7 @@ func (h *BapendaHandler) GetInfoPajak(c fiber.Ctx) error {
 
 	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
 }
+
 
 // =============================================================================
 // CASCADING DROPDOWN — kalkulator NJKB

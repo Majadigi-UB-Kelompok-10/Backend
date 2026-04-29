@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -11,79 +13,124 @@ type ValidationError struct {
 	Message string
 }
 
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
 
-func ValidateQueryString(input string, maxLength int, fieldName string) (string, *ValidationError) {
+var dangerousChars = regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
+
+
+func SanitizeQueryString(input string, maxLength int, fieldName string) (string, *ValidationError) {
 	if input == "" {
-		return "", nil 
+		return "", nil
 	}
 
-	input = strings.TrimSpace(input)
+	trimmed := strings.TrimSpace(input)
 
-	if utf8.RuneCountInString(input) > maxLength {
+	if utf8.RuneCountInString(trimmed) > maxLength {
 		return "", &ValidationError{
 			Field:   fieldName,
-			Message: "Input terlalu panjang (max: " + string(rune(maxLength)) + " karakter)",
+			Message: fmt.Sprintf("Input terlalu panjang (maks %d karakter)", maxLength),
 		}
 	}
 
-	dangerousPattern := regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
-	sanitized := dangerousPattern.ReplaceAllString(input, "")
+	sanitized := dangerousChars.ReplaceAllString(trimmed, "")
+	sanitized = strings.TrimSpace(sanitized)
 
-	if strings.TrimSpace(sanitized) == "" && input != "" {
+	if sanitized == "" && trimmed != "" {
 		return "", &ValidationError{
 			Field:   fieldName,
 			Message: "Input mengandung karakter yang tidak diizinkan",
 		}
 	}
 
-	return strings.TrimSpace(sanitized), nil
+	return sanitized, nil
 }
 
-func ValidatePaginationParams(pageStr, limitStr string) (page int, limit int) {
-	page = 1
-	limit = 10
 
-	if p, ok := parseInt(pageStr); ok && p > 0 {
-		page = p
-	}
-	if l, ok := parseInt(limitStr); ok && l > 0 {
-		limit = l
+
+const (
+	DefaultPage     = 1
+	DefaultLimit    = 10
+	MaxLimit        = 100
+	maxPageDigits   = 6 
+	maxLimitDigits  = 3 
+)
+
+
+func ParsePagination(pageStr, limitStr string) (page, limit, offset int) {
+	page = parseIntBounded(pageStr, maxPageDigits, DefaultPage)
+	if page < 1 {
+		page = DefaultPage
 	}
 
-	if limit > 50 {
-		limit = 50
+	limit = parseIntBounded(limitStr, maxLimitDigits, DefaultLimit)
+	if limit < 1 {
+		limit = DefaultLimit
+	}
+	if limit > MaxLimit {
+		limit = MaxLimit
 	}
 
-	return page, limit
+	offset = (page - 1) * limit
+	return
 }
 
-func parseInt(s string) (int, bool) {
-	if s == "" || len(s) > 3 {
-		return 0, false
+
+func parseIntBounded(s string, maxDigits, fallback int) int {
+	if s == "" || len(s) > maxDigits {
+		return fallback
 	}
-	var result int
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return 0, false
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+
+var platNomorPattern = regexp.MustCompile(`^[A-Z0-9]{3,15}$`)
+
+
+func ValidatePlatNomor(plat string) (string, *ValidationError) {
+	cleaned := strings.ToUpper(strings.ReplaceAll(plat, " ", ""))
+	if cleaned == "" {
+		return "", &ValidationError{Field: "plat_nomor", Message: "Plat nomor wajib diisi"}
+	}
+	if !platNomorPattern.MatchString(cleaned) {
+		return "", &ValidationError{
+			Field:   "plat_nomor",
+			Message: "Plat nomor harus berupa huruf dan angka (3-15 karakter)",
 		}
-		result = result*10 + int(ch-'0')
 	}
-	return result, true
+	return cleaned, nil
+}
+
+var nomorRangkaPattern = regexp.MustCompile(`^[A-Z0-9]{5}$`)
+
+func ValidateNomorRangka(rangka string) (string, *ValidationError) {
+	cleaned := strings.ToUpper(strings.TrimSpace(rangka))
+	if !nomorRangkaPattern.MatchString(cleaned) {
+		return "", &ValidationError{
+			Field:   "nomor_rangka",
+			Message: "Nomor rangka harus 5 karakter terakhir (huruf/angka)",
+		}
+	}
+	return cleaned, nil
 }
 
 
-func ValidateImageFilename(original string) string {
+
+var unsafeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
+func SanitizeFilename(original string) string {
 	filename := strings.TrimSpace(original)
+	filename = strings.ReplaceAll(filename, "..", "")
 	filename = strings.ReplaceAll(filename, "/", "")
 	filename = strings.ReplaceAll(filename, "\\", "")
-	filename = strings.ReplaceAll(filename, "..", "")
-
-	safePattern := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
-	filename = safePattern.ReplaceAllString(filename, "")
-
+	filename = unsafeFilenameChars.ReplaceAllString(filename, "")
 	if filename == "" {
 		filename = "image"
 	}
-
 	return filename
 }

@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/farildzaky/bapenda-service/internal/cache"
+	"github.com/farildzaky/bapenda-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 )
 
-
+// =============================================================================
+// CACHE TTL — diatur via env, fallback ke default
+// =============================================================================
 
 func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	val := os.Getenv(key)
@@ -34,6 +37,10 @@ var (
 	CacheTTLStatic = getEnvDuration("CACHE_TTL_AREA", 24*time.Hour)
 )
 
+// =============================================================================
+// CACHE HELPERS — konsisten di semua handler
+// =============================================================================
+
 
 func normalizeKey(parts ...string) string {
 	clean := make([]string, len(parts))
@@ -43,7 +50,7 @@ func normalizeKey(parts ...string) string {
 	return strings.Join(clean, ":")
 }
 
-
+// respondCached: kalau key ada di cache, langsung return. True kalau cache hit.
 func respondCached(c fiber.Ctx, key string) bool {
 	if cached, ok := cache.GlobalCache.Get(key); ok {
 		c.Set("Content-Type", "application/json")
@@ -55,12 +62,15 @@ func respondCached(c fiber.Ctx, key string) bool {
 	return false
 }
 
-
+// cacheJSON: simpan response ke cache dengan TTL, lalu return JSON ke client.
 func cacheJSON(c fiber.Ctx, key string, ttl time.Duration, body interface{}) error {
 	cache.GlobalCache.SetWithTTL(key, body, ttl)
 	return c.JSON(body)
 }
 
+// =============================================================================
+// VALIDATION HELPERS
+// =============================================================================
 
 
 func requireFields(c fiber.Ctx, fields map[string]string) error {
@@ -85,33 +95,6 @@ func requireFields(c fiber.Ctx, fields map[string]string) error {
 }
 
 
-
-const (
-	defaultPageLimit = 10
-	maxPageLimit     = 100
-)
-
-
 func parsePagination(c fiber.Ctx) (page, limit, offset int) {
-	page = atoiSafe(c.Query("page", "1"), 1)
-	if page < 1 {
-		page = 1
-	}
-	limit = atoiSafe(c.Query("limit", fmt.Sprintf("%d", defaultPageLimit)), defaultPageLimit)
-	if limit < 1 {
-		limit = defaultPageLimit
-	}
-	if limit > maxPageLimit {
-		limit = maxPageLimit
-	}
-	offset = (page - 1) * limit
-	return
-}
-
-func atoiSafe(s string, fallback int) int {
-	var n int
-	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
-		return fallback
-	}
-	return n
+	return utils.ParsePagination(c.Query("page"), c.Query("limit"))
 }
