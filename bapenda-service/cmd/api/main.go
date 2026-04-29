@@ -581,63 +581,9 @@ func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
 			Commit:    commit,
 		})
 	})
-}func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
-	type livenessResponse struct {
-		Status  string `json:"status"`
-		Service string `json:"service"`
-		Version string `json:"version"`
-		Commit  string `json:"commit"`
-		Uptime  string `json:"uptime"`
-	}
-
-	type readinessResponse struct {
-		Status    string    `json:"status"`
-		Database  string    `json:"database"`
-		Cache     string    `json:"cache"`
-		Timestamp time.Time `json:"timestamp"`
-		Service   string    `json:"service"`
-		Commit    string    `json:"commit"`
-	}
-
-	app.Get("/health", func(c fiber.Ctx) error {
-		return c.JSON(livenessResponse{
-			Status:  "alive",
-			Service: serviceName,
-			Version: version,
-			Commit:  commit,
-			Uptime:  time.Since(startedAt).String(),
-		})
-	})
-
-	app.Get("/ready", func(c fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		dbStatus, cacheStatus, ready := "ok", "ok", true
-
-		if err := pool.Ping(ctx); err != nil {
-			dbStatus = "down"
-			ready = false
-		}
-		if cache.GlobalCache == nil {
-			cacheStatus = "degraded"
-		}
-
-		status, overall := fiber.StatusOK, "ready"
-		if !ready {
-			status, overall = fiber.StatusServiceUnavailable, "not_ready"
-		}
-
-		return c.Status(status).JSON(readinessResponse{
-			Status:    overall,
-			Database:  dbStatus,
-			Cache:     cacheStatus,
-			Timestamp: time.Now(),
-			Service:   serviceName,
-			Commit:    commit,
-		})
-	})
 }
+	
+	
 
 // =============================================================================
 // PPROF — debug profiling on localhost only
