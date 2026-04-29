@@ -49,9 +49,7 @@ func SetupRoutes(app *fiber.App, hoaxHandler *handlers.HoaxHandler) {
 		return c.SendString("Klinik Hoaks API v1 Active")
 	})
 
-	// ==========================================================================
-	// 🌍 PUBLIC ENDPOINTS
-	// ==========================================================================
+
 	public := api.Group("/public")
 
 	public.Get("/categories", hoaxHandler.GetCategories)
@@ -61,20 +59,15 @@ func SetupRoutes(app *fiber.App, hoaxHandler *handlers.HoaxHandler) {
 	public.Get("/news", searchLimiter, hoaxHandler.GetPublicNews) 
 	public.Get("/news/:slug", hoaxHandler.GetPublicNewsDetailBySlug)
 
-	// ==========================================================================
-	// 🛡️ ADMIN ENDPOINTS
-	// ==========================================================================
+
 	admin := api.Group("/admin")
 
-	// Report Management
 	admin.Get("/reports", hoaxHandler.GetAllReportsAdmin)
 	admin.Post("/reports/process", strictLimiter, hoaxHandler.ProcessReportAdmin)
 	admin.Post("/reports/reject", strictLimiter, hoaxHandler.RejectReportAdmin)
 
-	// News Management (Hasil Recovery)
 	admin.Get("/news", hoaxHandler.GetAllNewsAdmin)
 	admin.Delete("/news/:id", strictLimiter, hoaxHandler.DeleteNewsAdmin)
 
-	// Category Management (Hasil Recovery)
 	admin.Post("/categories", strictLimiter, hoaxHandler.CreateCategoryAdmin)
 }
