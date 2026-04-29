@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof" // gated by ENABLE_PPROF
+	_ "net/http/pprof" 
 	"os"
 	"os/signal"
 	"regexp"
@@ -36,12 +36,7 @@ import (
 	"github.com/farildzaky/bapenda-service/internal/routes"
 )
 
-// =============================================================================
-// BUILD INFO — di-inject saat build via -ldflags:
-// go build -ldflags "-X main.version=$(git describe --tags) \
-//                    -X main.commit=$(git rev-parse --short HEAD) \
-//                    -X main.buildTime=$(date -u +%FT%TZ)"
-// =============================================================================
+
 var (
 	serviceName = "bapenda-service"
 	version     = "dev"
@@ -54,12 +49,10 @@ var (
 // CONFIG — typed, validated, single source of truth
 // =============================================================================
 type Config struct {
-	// Server
 	Port            string
-	Environment     string // dev | staging | production
+	Environment     string 
 	ShutdownTimeout time.Duration
 
-	// Database
 	DatabaseURL    string
 	DBMaxConns     int32
 	DBMinConns     int32
@@ -67,22 +60,17 @@ type Config struct {
 	DBMaxIdle      time.Duration
 	DBQueryTimeout time.Duration
 
-	// Cache
 	RedisURL string
 
-	// Gateway
 	GatewayDBURL  string
 	ServicePublic string
 
-	// Security & limits
 	AllowedOrigins []string
 	BodyLimitBytes int
 
-	// Rate limiting
 	RateLimitMax    int
 	RateLimitWindow time.Duration
 
-	// Observability
 	LogLevel    slog.Level
 	EnablePprof bool
 	PprofPort   string
@@ -118,7 +106,6 @@ func loadConfig() (*Config, error) {
 		PprofPort:   getEnv("PPROF_PORT", "6060"),
 	}
 
-	// Required vars — fail fast biar ketauan langsung di startup, bukan saat request
 	if cfg.DatabaseURL == "" {
 		return nil, errors.New("DATABASE_URL is required")
 	}
@@ -245,7 +232,6 @@ func newDBPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse db config: %w", err)
 	}
 
-	// Tracer: query normal di Debug (silent di prod), slow query (>500ms) di Warn
 	pgxCfg.ConnConfig.Tracer = &tracelog.TraceLog{
 		Logger: tracelog.LoggerFunc(func(_ context.Context, _ tracelog.LogLevel, msg string, data map[string]interface{}) {
 			if msg != "Query" {
@@ -309,7 +295,6 @@ func initializeCache(cfg *Config) error {
 func main() {
 	_ = godotenv.Load()
 
-	// Auto-populate commit dari debug.BuildInfo kalau gak di-inject via ldflags
 	if info, ok := debug.ReadBuildInfo(); ok && commit == "unknown" {
 		for _, s := range info.Settings {
 			switch s.Key {
@@ -343,7 +328,6 @@ func main() {
 
 	rootCtx := context.Background()
 
-	// Database
 	pool, err := newDBPool(rootCtx, cfg)
 	if err != nil {
 		slog.Error("init database failed", slog.String("error", maskSensitiveData(err.Error())))
@@ -351,14 +335,12 @@ func main() {
 	}
 	slog.Info("postgresql terhubung", slog.Int("max_conns", int(cfg.DBMaxConns)))
 
-	// Cache
 	if err := initializeCache(cfg); err != nil {
 		slog.Error("init cache failed", slog.String("error", maskSensitiveData(err.Error())))
 		pool.Close()
 		os.Exit(1)
 	}
 
-	// Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
 		JSONEncoder:           sonic.Marshal,
@@ -373,27 +355,22 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
-	// Routes
 	queries := db.New(pool)
 	bapendaHandler := handlers.NewBapendaHandler(queries)
 	routes.SetupRoutes(app, bapendaHandler)
 	slog.Info("routes terkonfigurasi")
 
-	// Cache warmup di background — jangan blok startup
 	go bapendaHandler.RunCacheWarmup()
 
-	// Service registry di background — gateway down jangan ngeblok startup
 	go func() {
 		registry.AutoRegister(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
-	// Pprof server (opsional, localhost only)
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
 	}
 
-	// Start HTTP server
 	serverErr := make(chan error, 1)
 	go func() {
     slog.Info("listening", slog.String("addr", ":"+cfg.Port))
@@ -404,7 +381,6 @@ func main() {
     }
 	}()
 
-	// Tunggu signal atau error
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
@@ -422,7 +398,6 @@ func main() {
 // MIDDLEWARE STACK
 // =============================================================================
 func registerMiddleware(app *fiber.App, cfg *Config) {
-	// 1. Recover paling awal — tangkap panic dari middleware lain juga
 	app.Use(recover.New(recover.Config{
 		EnableStackTrace: cfg.Environment != "production",
 		StackTraceHandler: func(c fiber.Ctx, e any) {
@@ -435,10 +410,8 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 		},
 	}))
 
-	// 2. Request ID lebih awal — supaya middleware setelahnya bisa pakai
 	app.Use(requestid.New())
 
-	// 3. Security headers
 	app.Use(helmet.New(helmet.Config{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
@@ -450,12 +423,10 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 		ContentSecurityPolicy: "default-src 'self'",
 	}))
 
-	// 4. HTTP access log
 	app.Use(logger.New(logger.Config{
 		Format: `{"ts":"${time}","level":"info","msg":"http","method":"${method}","path":"${path}","status":${status},"latency":"${latency}","ip":"${ip}","reqid":"${locals:requestid}","ua":"${ua}"}` + "\n",
 	}))
 
-	// 5. CORS
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -465,10 +436,8 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 		MaxAge:           3600,
 	}))
 
-	// 6. Compression
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
-	// 7. Global rate limiter — skip health probes
 	app.Use(limiter.New(limiter.Config{
 		Max:        cfg.RateLimitMax,
 		Expiration: cfg.RateLimitWindow,
@@ -615,7 +584,6 @@ func gracefulShutdown(app *fiber.App, pool *pgxpool.Pool, cfg *Config) {
 		slog.Info("server http berhenti menerima request")
 	}
 
-	// 2. Tutup cache
 	if rc, ok := cache.GlobalCache.(*cache.RedisCache); ok {
 		slog.Info("menutup koneksi redis")
 		rc.Close()

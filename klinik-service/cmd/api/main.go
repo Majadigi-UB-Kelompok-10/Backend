@@ -38,11 +38,9 @@ import (
 	"github.com/farildzaky/klinik-service/internal/routes"
 )
 
-// =============================================================================
-// BUILD INFO
-// =============================================================================
+
 var (
-	serviceName = "klinik-hoaks-service" // 🚀 Sesuaikan dengan Klinik
+	serviceName = "klinik-hoaks-service" 
 	version     = "dev"
 	commit      = "unknown"
 	buildTime   = "unknown"
@@ -65,7 +63,7 @@ type Config struct {
 	DBQueryTimeout time.Duration
 
 	RedisURL       string
-	CloudinaryURL  string // 🚀 Khusus Klinik
+	CloudinaryURL  string 
 
 	GatewayDBURL  string
 	ServicePublic string
@@ -374,7 +372,7 @@ func main() {
 	registerHealthEndpoints(app, pool)
 
 	queries := db.New(pool)
-	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld) // 🚀 Sesuaikan dengan struct Klinik
+	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld) 
 	routes.SetupRoutes(app, hoaxHandler)
 	slog.Info("routes terkonfigurasi")
 
