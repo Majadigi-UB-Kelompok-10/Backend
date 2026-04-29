@@ -23,9 +23,11 @@ func (q *Queries) CountAllNewsAdmin(ctx context.Context) (int64, error) {
 }
 
 const countAllReportsAdmin = `-- name: CountAllReportsAdmin :one
-SELECT COUNT(id) 
+SELECT COUNT(id)
 FROM hoax_reports
-WHERE ($1::report_status IS NULL OR status = $1::report_status)
+WHERE 
+    $1::report_status IS NULL 
+    OR status = $1::report_status
 `
 
 func (q *Queries) CountAllReportsAdmin(ctx context.Context, statusFilter NullReportStatus) (int64, error) {
@@ -49,7 +51,7 @@ func (q *Queries) CountPublicNews(ctx context.Context) (int64, error) {
 const countSearchPublicNews = `-- name: CountSearchPublicNews :one
 SELECT COUNT(n.id)
 FROM hoax_news n
-WHERE 
+WHERE
     n.search_vector @@ plainto_tsquery('simple', $1::text)
     OR n.title ILIKE '%' || $1::text || '%'
 `
@@ -62,7 +64,7 @@ func (q *Queries) CountSearchPublicNews(ctx context.Context, keyword string) (in
 }
 
 const createCategory = `-- name: CreateCategory :one
-INSERT INTO hoax_categories (name, slug, icon_url) 
+INSERT INTO hoax_categories (name, slug, icon_url)
 VALUES ($1, $2, $3)
 RETURNING id
 `
@@ -82,16 +84,17 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 
 const createNewsClarification = `-- name: CreateNewsClarification :one
 INSERT INTO hoax_news (
-    report_id, category_id, title, slug, description, reference_link, image_url
+    report_id, category_id, title, slug, 
+    description, reference_link, image_url
 ) VALUES (
-    $1, 
-    $2, 
-    $3, 
+    $1,
+    $2,
+    $3,
     $4,
-    $5, 
-    $6, 
+    $5,
+    $6,
     $7
-) RETURNING id, title, published_at
+) RETURNING id, title, slug, published_at
 `
 
 type CreateNewsClarificationParams struct {
@@ -107,6 +110,7 @@ type CreateNewsClarificationParams struct {
 type CreateNewsClarificationRow struct {
 	ID          pgtype.UUID        `json:"id"`
 	Title       string             `json:"title"`
+	Slug        string             `json:"slug"`
 	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
@@ -121,27 +125,30 @@ func (q *Queries) CreateNewsClarification(ctx context.Context, arg CreateNewsCla
 		arg.ImageUrl,
 	)
 	var i CreateNewsClarificationRow
-	err := row.Scan(&i.ID, &i.Title, &i.PublishedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.PublishedAt,
+	)
 	return i, err
 }
 
 const createReport = `-- name: CreateReport :one
 INSERT INTO hoax_reports (
-    ticket_number, reporter_name, reporter_email, reporter_phone, 
+    reporter_name, reporter_email, reporter_phone,
     content, proof_link, proof_image_url
 ) VALUES (
-    $1, 
-    $2, 
-    $3, 
-    $4, 
-    $5, 
-    $6,      
-    $7 
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6
 ) RETURNING id, ticket_number, created_at
 `
 
 type CreateReportParams struct {
-	TicketNumber  string      `json:"ticket_number"`
 	ReporterName  string      `json:"reporter_name"`
 	ReporterEmail string      `json:"reporter_email"`
 	ReporterPhone string      `json:"reporter_phone"`
@@ -158,7 +165,6 @@ type CreateReportRow struct {
 
 func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (CreateReportRow, error) {
 	row := q.db.QueryRow(ctx, createReport,
-		arg.TicketNumber,
 		arg.ReporterName,
 		arg.ReporterEmail,
 		arg.ReporterPhone,
@@ -181,8 +187,8 @@ func (q *Queries) DeleteNews(ctx context.Context, newsID pgtype.UUID) error {
 }
 
 const getAllCategories = `-- name: GetAllCategories :many
-SELECT id, name, slug, icon_url 
-FROM hoax_categories 
+SELECT id, name, slug, icon_url
+FROM hoax_categories
 ORDER BY name ASC
 `
 
@@ -219,8 +225,9 @@ func (q *Queries) GetAllCategories(ctx context.Context) ([]GetAllCategoriesRow, 
 }
 
 const getAllNewsAdmin = `-- name: GetAllNewsAdmin :many
-SELECT 
-    n.id, n.title, c.name AS category_name, n.published_at, n.created_at,
+SELECT
+    n.id, n.title, n.slug, n.published_at, n.created_at,
+    c.name           AS category_name,
     r.ticket_number
 FROM hoax_news n
 JOIN hoax_categories c ON n.category_id = c.id
@@ -237,9 +244,10 @@ type GetAllNewsAdminParams struct {
 type GetAllNewsAdminRow struct {
 	ID           pgtype.UUID        `json:"id"`
 	Title        string             `json:"title"`
-	CategoryName string             `json:"category_name"`
+	Slug         string             `json:"slug"`
 	PublishedAt  pgtype.Timestamptz `json:"published_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	CategoryName string             `json:"category_name"`
 	TicketNumber pgtype.Text        `json:"ticket_number"`
 }
 
@@ -255,9 +263,10 @@ func (q *Queries) GetAllNewsAdmin(ctx context.Context, arg GetAllNewsAdminParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.CategoryName,
+			&i.Slug,
 			&i.PublishedAt,
 			&i.CreatedAt,
+			&i.CategoryName,
 			&i.TicketNumber,
 		); err != nil {
 			return nil, err
@@ -271,11 +280,13 @@ func (q *Queries) GetAllNewsAdmin(ctx context.Context, arg GetAllNewsAdminParams
 }
 
 const getAllReportsAdmin = `-- name: GetAllReportsAdmin :many
-SELECT 
-    id, ticket_number, reporter_name, reporter_email, 
+SELECT
+    id, ticket_number, reporter_name, reporter_email,
     content, proof_link, proof_image_url, status, created_at
 FROM hoax_reports
-WHERE ($1::report_status IS NULL OR status = $1::report_status)
+WHERE 
+    $1::report_status IS NULL 
+    OR status = $1::report_status
 ORDER BY created_at ASC
 LIMIT $3 OFFSET $2
 `
@@ -329,12 +340,12 @@ func (q *Queries) GetAllReportsAdmin(ctx context.Context, arg GetAllReportsAdmin
 }
 
 const getDashboardStats = `-- name: GetDashboardStats :many
-SELECT 
-    c.id AS category_id,
-    c.name AS category_name,
-    c.slug AS category_slug,
+SELECT
+    c.id            AS category_id,
+    c.name          AS category_name,
+    c.slug          AS category_slug,
     c.icon_url,
-    COUNT(n.id) AS total_news
+    COUNT(n.id)     AS total_news
 FROM hoax_categories c
 LEFT JOIN hoax_news n ON c.id = n.category_id
 GROUP BY c.id, c.name, c.slug, c.icon_url
@@ -376,8 +387,9 @@ func (q *Queries) GetDashboardStats(ctx context.Context) ([]GetDashboardStatsRow
 }
 
 const getNewsDetail = `-- name: GetNewsDetail :one
-SELECT 
-    n.id, n.title, n.description, n.reference_link, n.image_url, n.published_at, 
+SELECT
+    n.id, n.title, n.slug, n.description, n.reference_link, 
+    n.image_url, n.published_at,
     c.name AS category_name, c.slug AS category_slug
 FROM hoax_news n
 JOIN hoax_categories c ON n.category_id = c.id
@@ -388,6 +400,7 @@ LIMIT 1
 type GetNewsDetailRow struct {
 	ID            pgtype.UUID        `json:"id"`
 	Title         string             `json:"title"`
+	Slug          string             `json:"slug"`
 	Description   string             `json:"description"`
 	ReferenceLink pgtype.Text        `json:"reference_link"`
 	ImageUrl      string             `json:"image_url"`
@@ -402,6 +415,7 @@ func (q *Queries) GetNewsDetail(ctx context.Context, newsID pgtype.UUID) (GetNew
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
+		&i.Slug,
 		&i.Description,
 		&i.ReferenceLink,
 		&i.ImageUrl,
@@ -413,11 +427,13 @@ func (q *Queries) GetNewsDetail(ctx context.Context, newsID pgtype.UUID) (GetNew
 }
 
 const getNewsDetailBySlug = `-- name: GetNewsDetailBySlug :one
-SELECT h.id, h.title, h.slug, h.description, h.reference_link, h.image_url, h.published_at, 
-       c.name AS category_name, c.slug AS category_slug
-FROM hoax_news h
-JOIN hoax_categories c ON h.category_id = c.id
-WHERE h.slug = $1
+SELECT
+    n.id, n.title, n.slug, n.description, n.reference_link, 
+    n.image_url, n.published_at,
+    c.name AS category_name, c.slug AS category_slug
+FROM hoax_news n
+JOIN hoax_categories c ON n.category_id = c.id
+WHERE n.slug = $1
 LIMIT 1
 `
 
@@ -451,8 +467,8 @@ func (q *Queries) GetNewsDetailBySlug(ctx context.Context, slug string) (GetNews
 }
 
 const getPublicNews = `-- name: GetPublicNews :many
-SELECT 
-    n.id, n.title, n.slug, n.image_url, n.published_at, 
+SELECT
+    n.id, n.title, n.slug, n.image_url, n.published_at,
     c.name AS category_name, c.slug AS category_slug
 FROM hoax_news n
 JOIN hoax_categories c ON n.category_id = c.id
@@ -504,20 +520,21 @@ func (q *Queries) GetPublicNews(ctx context.Context, arg GetPublicNewsParams) ([
 }
 
 const getReportTrackingByTicket = `-- name: GetReportTrackingByTicket :one
-SELECT 
-    r.id AS report_id,
+SELECT
+    r.id              AS report_id,
     r.ticket_number,
     r.reporter_name,
-    r.status AS report_status,
-    r.created_at AS reported_at,
-    n.id AS news_id,
-    n.title AS news_title,
-    n.image_url AS news_image,
-    c.name AS category_name
+    r.status          AS report_status,
+    r.created_at      AS reported_at,
+    n.id              AS news_id,
+    n.title           AS news_title,
+    n.slug            AS news_slug,
+    n.image_url       AS news_image,
+    c.name            AS category_name
 FROM hoax_reports r
-LEFT JOIN hoax_news n ON n.report_id = r.id
+LEFT JOIN hoax_news n       ON n.report_id   = r.id
 LEFT JOIN hoax_categories c ON n.category_id = c.id
-WHERE r.ticket_number = UPPER(REPLACE($1::text, ' ', ''))
+WHERE r.ticket_number = $1::text
 LIMIT 1
 `
 
@@ -529,6 +546,7 @@ type GetReportTrackingByTicketRow struct {
 	ReportedAt   pgtype.Timestamptz `json:"reported_at"`
 	NewsID       pgtype.UUID        `json:"news_id"`
 	NewsTitle    pgtype.Text        `json:"news_title"`
+	NewsSlug     pgtype.Text        `json:"news_slug"`
 	NewsImage    pgtype.Text        `json:"news_image"`
 	CategoryName pgtype.Text        `json:"category_name"`
 }
@@ -544,6 +562,7 @@ func (q *Queries) GetReportTrackingByTicket(ctx context.Context, ticketNumber st
 		&i.ReportedAt,
 		&i.NewsID,
 		&i.NewsTitle,
+		&i.NewsSlug,
 		&i.NewsImage,
 		&i.CategoryName,
 	)
@@ -551,15 +570,15 @@ func (q *Queries) GetReportTrackingByTicket(ctx context.Context, ticketNumber st
 }
 
 const searchPublicNews = `-- name: SearchPublicNews :many
-SELECT 
-    n.id, n.title, n.slug, n.image_url, n.published_at, 
+SELECT
+    n.id, n.title, n.slug, n.image_url, n.published_at,
     c.name AS category_name, c.slug AS category_slug
 FROM hoax_news n
 JOIN hoax_categories c ON n.category_id = c.id
-WHERE 
+WHERE
     n.search_vector @@ plainto_tsquery('simple', $1::text)
     OR n.title ILIKE '%' || $1::text || '%'
-ORDER BY 
+ORDER BY
     ts_rank(n.search_vector, plainto_tsquery('simple', $1::text)) DESC,
     n.published_at DESC
 LIMIT $3 OFFSET $2
@@ -610,7 +629,7 @@ func (q *Queries) SearchPublicNews(ctx context.Context, arg SearchPublicNewsPara
 }
 
 const updateReportStatus = `-- name: UpdateReportStatus :exec
-UPDATE hoax_reports 
+UPDATE hoax_reports
 SET status = $1
 WHERE id = $2
 `
