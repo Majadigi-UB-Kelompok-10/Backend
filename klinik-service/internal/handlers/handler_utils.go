@@ -1,9 +1,19 @@
 package handlers
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/farildzaky/klinik-service/internal/cache"
+	"github.com/farildzaky/klinik-service/internal/utils"
+	"github.com/gofiber/fiber/v3"
 )
+
+// =============================================================================
+// CACHE TTL — diatur via env, fallback ke default
+// =============================================================================
 
 func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	val := os.Getenv(key)
@@ -18,8 +28,84 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 }
 
 var (
-	CacheTTLList   = getEnvDuration("CACHE_TTL_LIST", 5*time.Minute)
+	CacheTTLList = getEnvDuration("CACHE_TTL_LIST", 10*time.Minute)
+
 	CacheTTLDetail = getEnvDuration("CACHE_TTL_DETAIL", 30*time.Minute)
-	CacheTTLMaps   = getEnvDuration("CACHE_TTL_MAPS", 1*time.Hour)  
-	CacheTTLStatic = getEnvDuration("CACHE_TTL_STATIC", 24*time.Hour) 
+
+	CacheTTLMaps = getEnvDuration("CACHE_TTL_MAPS", 1*time.Hour)
+
+	CacheTTLStatic = getEnvDuration("CACHE_TTL_AREA", 24*time.Hour)
 )
+
+// =============================================================================
+// CACHE HELPERS — konsisten di semua handler
+// =============================================================================
+
+func normalizeKey(parts ...string) string {
+	clean := make([]string, len(parts))
+	for i, p := range parts {
+		clean[i] = strings.ToLower(strings.ReplaceAll(p, " ", ""))
+	}
+	return strings.Join(clean, ":")
+}
+
+func respondCached(c fiber.Ctx, key string) bool {
+	if cached, ok := cache.GlobalCache.Get(key); ok {
+		c.Set("Content-Type", "application/json")
+		c.Set("X-Cache", "HIT")
+		_ = c.Send(cached)
+		return true
+	}
+	c.Set("X-Cache", "MISS")
+	return false
+}
+
+func cacheJSON(c fiber.Ctx, key string, ttl time.Duration, body interface{}) error {
+	cache.GlobalCache.Set(key, body, ttl)
+	return c.JSON(body)
+}
+
+// =============================================================================
+// VALIDATION HELPERS
+// =============================================================================
+
+func requireFields(c fiber.Ctx, fields map[string]string) error {
+	var errs []FieldError
+	for field, value := range fields {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, FieldError{
+				Field:   field,
+				Message: fmt.Sprintf("%s wajib diisi", field),
+			})
+		}
+	}
+	if len(errs) > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION_FAILED",
+			Message: "Input tidak valid",
+			Action:  "Harap perbaiki data input",
+			Errors:  errs,
+		})
+	}
+	return nil
+}
+
+
+func validationErrorResponse(c fiber.Ctx, ve *utils.ValidationError) error {
+	return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+		Code:    "ERR_VALIDATION_FAILED",
+		Message: "Input tidak valid",
+		Action:  "Harap perbaiki data input",
+		Errors: []FieldError{
+			{Field: ve.Field, Message: ve.Message},
+		},
+	})
+}
+
+// =============================================================================
+// PAGINATION
+// =============================================================================
+
+func parsePagination(c fiber.Ctx) (page, limit, offset int) {
+	return utils.ValidatePaginationParams(c.Query("page"), c.Query("limit"))
+}
