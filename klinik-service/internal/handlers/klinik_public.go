@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,12 +16,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// =============================================================================
+// PUBLIC: CATEGORIES
+// =============================================================================
+
 func (h *HoaxHandler) GetCategories(c fiber.Ctx) error {
 	cacheKey := "hoax:categories:all"
-
-	if cached, found := cache.GlobalCache.Get(cacheKey); found {
-		c.Set("Content-Type", "application/json")
-		return c.Send(cached)
+	if respondCached(c, cacheKey) {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
@@ -28,39 +31,36 @@ func (h *HoaxHandler) GetCategories(c fiber.Ctx) error {
 
 	data, err := h.Queries.GetAllCategories(ctx)
 	if err != nil {
-		slog.Error("GetCategories DB Error", slog.String("err", err.Error()))
-		return c.Status(500).JSON(ErrorResponse{
+		slog.Error("public.categories.error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
-			Message: "Gagal mengambil daftar kategori.",
+			Message: "Gagal mengambil daftar kategori",
 		})
 	}
 
-	var responseData []map[string]interface{}
+	responseData := make([]CategoryItem, 0, len(data))
 	for _, row := range data {
-		responseData = append(responseData, map[string]interface{}{
-			"id":   pgUUIDToStr(row.ID),
-			"name": row.Name,
-			"slug": row.Slug,
+		responseData = append(responseData, CategoryItem{
+			ID:      pgUUIDToStr(row.ID),
+			Name:    row.Name,
+			Slug:    row.Slug,
+			IconUrl: pgTextToStr(row.IconUrl),
 		})
 	}
 
-	if responseData == nil {
-		responseData = []map[string]interface{}{}
-	}
-
-	res := SuccessResponse{
-		Pesan: "Daftar Kategori",
-		Data:  responseData,
-	}
-
-	cache.GlobalCache.Set(cacheKey, res, CacheTTLStatic)
-	return c.JSON(res)
+	res := SuccessResponse{Pesan: "Daftar Kategori", Data: responseData}
+	return cacheJSON(c, cacheKey, CacheTTLStatic, res)
 }
+
+// =============================================================================
+// PUBLIC: SUBMIT REPORT
+// =============================================================================
 
 func (h *HoaxHandler) SubmitReport(c fiber.Ctx) error {
 	var fieldErrors []FieldError
 
-	name, errN := utils.ValidateQueryString(c.FormValue("nama"), 150, "nama")
+	rawName := c.FormValue("nama")
+	name, errN := utils.ValidateQueryString(rawName, 150, "nama")
 	if name == "" {
 		msg := "Nama tidak boleh kosong"
 		if errN != nil {
@@ -90,69 +90,81 @@ func (h *HoaxHandler) SubmitReport(c fiber.Ctx) error {
 	}
 
 	if len(fieldErrors) > 0 {
-		return c.Status(400).JSON(ErrorResponse{
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "Gagal mengirim laporan karena data tidak valid.",
-			Action:  "Periksa kembali isian form Anda pada kolom yang salah.",
+			Message: "Gagal mengirim laporan karena data tidak valid",
+			Action:  "Periksa kembali isian form Anda pada kolom yang salah",
 			Errors:  fieldErrors,
 		})
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextUploadTimeout)
-	defer cancel()
+	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+	defer cancelUpload()
 
 	var imageUrl string
 	if file, err := c.FormFile("gambar_bukti"); err == nil {
-		url, errUp := h.uploadImageReal(ctx, file, "klinik_hoaks_reports")
+		url, errUp := h.uploadImageReal(uploadCtx, file, "klinik_hoaks_reports")
 		if errUp != nil {
-			slog.Error("Upload Bukti Failed", slog.String("err", errUp.Error()))
-			return c.Status(400).JSON(ErrorResponse{
+			slog.Error("public.upload.failed", slog.String("err", errUp.Error()))
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 				Code:    "ERR_FILE_UPLOAD",
-				Message: "Gambar bukti ditolak oleh sistem: " + errUp.Error(),
-				Action:  "Pastikan ukuran dan format gambar sesuai.",
+				Message: "Gambar bukti ditolak: " + errUp.Error(),
+				Action:  "Pastikan ukuran dan format gambar sesuai",
 			})
 		}
 		imageUrl = url
 	}
 
-	ticketNumber := generateTicket()
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
 
-	arg := db.CreateReportParams{
-		TicketNumber:  ticketNumber,
+	res, err := h.Queries.CreateReport(ctx, db.CreateReportParams{
 		ReporterName:  name,
 		ReporterEmail: email,
 		ReporterPhone: phone,
 		Content:       content,
 		ProofLink:     pgtype.Text{String: proofLink, Valid: proofLink != ""},
 		ProofImageUrl: pgtype.Text{String: imageUrl, Valid: imageUrl != ""},
-	}
-
-	_, err := h.Queries.CreateReport(ctx, arg)
+	})
 	if err != nil {
-		slog.Error("Create Report DB Error", slog.String("err", err.Error()))
-		return c.Status(500).JSON(ErrorResponse{
+		slog.Error("public.report.create_failed", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
-			Message: "Terjadi kendala saat menyimpan laporan Anda.",
-			Action:  "Sistem kami sedang sibuk. Silakan tunggu beberapa menit dan coba lagi.",
+			Message: "Terjadi kendala saat menyimpan laporan",
+			Action:  "Sistem sedang sibuk, silakan coba lagi sebentar",
 		})
 	}
 
-	sendEmailAsync(email, name, ticketNumber, "PENDING")
-	slog.Info("Report Created", slog.String("ticket", ticketNumber), slog.String("email", email))
+	cache.GlobalCache.Delete("hoax:stats")
 
-	return c.Status(201).JSON(SuccessResponse{
+	sendEmailAsync(email, name, res.TicketNumber, "PENDING")
+	slog.Info("public.report.created",
+		slog.String("ticket", res.TicketNumber),
+		slog.String("email", email),
+	)
+
+	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Laporan berhasil dikirim",
-		Data:  TicketCreatedResponse{TicketNumber: ticketNumber},
+		Data: TicketCreatedResponse{
+			TicketNumber: res.TicketNumber,
+			CreatedAt:    res.CreatedAt.Time.Format(time.RFC3339),
+		},
 	})
 }
 
+// =============================================================================
+// PUBLIC: TRACK REPORT BY TICKET
+// =============================================================================
+
 func (h *HoaxHandler) TrackReport(c fiber.Ctx) error {
-	ticket := strings.ToUpper(strings.TrimSpace(c.Query("no_tiket")))
+	rawTicket := c.Query("no_tiket")
+	ticket := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(rawTicket), " ", ""))
+
 	if ticket == "" {
-		return c.Status(400).JSON(ErrorResponse{
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "Nomor tiket wajib diisi.",
-			Action:  "Masukkan nomor tiket yang dikirimkan ke email Anda.",
+			Message: "Nomor tiket wajib diisi",
+			Action:  "Masukkan nomor tiket yang dikirim ke email Anda",
 		})
 	}
 
@@ -161,11 +173,11 @@ func (h *HoaxHandler) TrackReport(c fiber.Ctx) error {
 
 	data, err := h.Queries.GetReportTrackingByTicket(ctx, ticket)
 	if err != nil {
-		slog.Warn("Report tracking not found", slog.String("ticket", ticket))
-		return c.Status(404).JSON(ErrorResponse{
+		slog.Warn("public.track.not_found", slog.String("ticket", ticket))
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
-			Message: "Data laporan tidak ditemukan.",
-			Action:  "Pastikan nomor tiket sudah diketik dengan benar.",
+			Message: "Data laporan tidak ditemukan",
+			Action:  "Pastikan nomor tiket sudah benar",
 		})
 	}
 
@@ -180,6 +192,7 @@ func (h *HoaxHandler) TrackReport(c fiber.Ctx) error {
 	if data.NewsID.Valid {
 		response.NewsID = pgUUIDToStr(data.NewsID)
 		response.NewsTitle = pgTextToStr(data.NewsTitle)
+		response.NewsSlug = pgTextToStr(data.NewsSlug)
 		response.NewsImage = pgTextToStr(data.NewsImage)
 		response.CategoryName = pgTextToStr(data.CategoryName)
 	}
@@ -187,11 +200,14 @@ func (h *HoaxHandler) TrackReport(c fiber.Ctx) error {
 	return c.JSON(SuccessResponse{Pesan: "Data Ditemukan", Data: response})
 }
 
+// =============================================================================
+// PUBLIC: DASHBOARD STATS
+// =============================================================================
+
 func (h *HoaxHandler) GetDashboardStats(c fiber.Ctx) error {
 	cacheKey := "hoax:stats"
-	if cached, found := cache.GlobalCache.Get(cacheKey); found {
-		c.Set("Content-Type", "application/json")
-		return c.Send(cached)
+	if respondCached(c, cacheKey) {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
@@ -199,57 +215,58 @@ func (h *HoaxHandler) GetDashboardStats(c fiber.Ctx) error {
 
 	data, err := h.Queries.GetDashboardStats(ctx)
 	if err != nil {
-		slog.Error("GetDashboardStats DB Error", slog.String("err", err.Error()))
-		return c.Status(500).JSON(ErrorResponse{
+		slog.Error("public.stats.error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
-			Message: "Gagal mengambil statistik dasbor.",
-			Action:  "Silakan muat ulang halaman.",
+			Message: "Gagal mengambil statistik dasbor",
 		})
 	}
 
-	var responseData []DashboardStatItem
+	responseData := make([]DashboardStatItem, 0, len(data))
 	for _, row := range data {
 		responseData = append(responseData, DashboardStatItem{
 			CategoryID:   pgUUIDToStr(row.CategoryID),
 			CategoryName: row.CategoryName,
 			CategorySlug: row.CategorySlug,
+			IconUrl:      pgTextToStr(row.IconUrl),
 			TotalNews:    row.TotalNews,
 		})
 	}
 
 	res := SuccessResponse{Pesan: "Sukses", Data: responseData}
-	cache.GlobalCache.Set(cacheKey, res, CacheTTLList)
-	return c.JSON(res)
+	return cacheJSON(c, cacheKey, CacheTTLList, res)
 }
 
-func (h *HoaxHandler) GetPublicNews(c fiber.Ctx) error {
-	pageStr, limitStr := c.Query("page", "1"), c.Query("limit", "10")
-	page, limit := utils.ValidatePaginationParams(pageStr, limitStr)
+// =============================================================================
+// PUBLIC: NEWS LIST + SEARCH (paginated)
+// =============================================================================
 
+func (h *HoaxHandler) GetPublicNews(c fiber.Ctx) error {
+	page, limit, offset := parsePagination(c)
 	keyword, _ := utils.ValidateQueryString(c.Query("search"), 100, "search")
 
 	cacheKey := fmt.Sprintf("hoax:news:public:q_%s:p%d:l%d", keyword, page, limit)
-	if cached, found := cache.GlobalCache.Get(cacheKey); found {
-		c.Set("Content-Type", "application/json")
-		return c.Send(cached)
+	if respondCached(c, cacheKey) {
+		return nil
 	}
 
-	offset := (page - 1) * limit
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	g, ctx := errgroup.WithContext(ctx)
-
+	g, gCtx := errgroup.WithContext(ctx)
 	var responseData []PublicNewsItem
 	var total int64
 
 	if keyword != "" {
 		g.Go(func() error {
-			data, err := h.Queries.SearchPublicNews(ctx, db.SearchPublicNewsParams{
+			data, err := h.Queries.SearchPublicNews(gCtx, db.SearchPublicNewsParams{
 				Keyword:    keyword,
 				LimitData:  int32(limit),
 				OffsetData: int32(offset),
 			})
+			if err != nil {
+				return err
+			}
 			for _, row := range data {
 				responseData = append(responseData, PublicNewsItem{
 					ID:           pgUUIDToStr(row.ID),
@@ -261,19 +278,22 @@ func (h *HoaxHandler) GetPublicNews(c fiber.Ctx) error {
 					PublishedAt:  row.PublishedAt.Time.Format("02 Jan 2006"),
 				})
 			}
-			return err
+			return nil
 		})
 		g.Go(func() error {
 			var err error
-			total, err = h.Queries.CountSearchPublicNews(ctx, keyword)
+			total, err = h.Queries.CountSearchPublicNews(gCtx, keyword)
 			return err
 		})
 	} else {
 		g.Go(func() error {
-			data, err := h.Queries.GetPublicNews(ctx, db.GetPublicNewsParams{
+			data, err := h.Queries.GetPublicNews(gCtx, db.GetPublicNewsParams{
 				LimitData:  int32(limit),
 				OffsetData: int32(offset),
 			})
+			if err != nil {
+				return err
+			}
 			for _, row := range data {
 				responseData = append(responseData, PublicNewsItem{
 					ID:           pgUUIDToStr(row.ID),
@@ -285,19 +305,20 @@ func (h *HoaxHandler) GetPublicNews(c fiber.Ctx) error {
 					PublishedAt:  row.PublishedAt.Time.Format("02 Jan 2006"),
 				})
 			}
-			return err
+			return nil
 		})
 		g.Go(func() error {
 			var err error
-			total, err = h.Queries.CountPublicNews(ctx)
+			total, err = h.Queries.CountPublicNews(gCtx)
 			return err
 		})
 	}
 
 	if err := g.Wait(); err != nil {
-		return c.Status(500).JSON(ErrorResponse{
+		slog.Error("public.news.error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
-			Message: "Gagal memuat daftar berita.",
+			Message: "Gagal memuat daftar berita",
 		})
 	}
 
@@ -315,26 +336,26 @@ func (h *HoaxHandler) GetPublicNews(c fiber.Ctx) error {
 		Data:       responseData,
 		Pagination: &PaginationMeta{Page: page, Limit: limit, Total: total},
 	}
-
-	cache.GlobalCache.Set(cacheKey, res, CacheTTLList)
-	return c.JSON(res)
+	return cacheJSON(c, cacheKey, CacheTTLList, res)
 }
 
-func (h *HoaxHandler) GetPublicNewsDetailBySlug(c fiber.Ctx) error {
-	newsSlug := c.Params("slug")
+// =============================================================================
+// PUBLIC: NEWS DETAIL BY SLUG
+// =============================================================================
 
+func (h *HoaxHandler) GetPublicNewsDetailBySlug(c fiber.Ctx) error {
+	newsSlug := strings.TrimSpace(c.Params("slug"))
 	if newsSlug == "" {
-		return c.Status(400).JSON(ErrorResponse{
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "Slug berita tidak valid.",
-			Action:  "Pastikan URL yang diakses benar.",
+			Message: "Slug berita tidak valid",
+			Action:  "Pastikan URL benar",
 		})
 	}
 
-	cacheKey := fmt.Sprintf("hoax:news:detail:%s", newsSlug)
-	if cached, found := cache.GlobalCache.Get(cacheKey); found {
-		c.Set("Content-Type", "application/json")
-		return c.Send(cached)
+	cacheKey := "hoax:news:detail:" + newsSlug
+	if respondCached(c, cacheKey) {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
@@ -342,17 +363,25 @@ func (h *HoaxHandler) GetPublicNewsDetailBySlug(c fiber.Ctx) error {
 
 	data, err := h.Queries.GetNewsDetailBySlug(ctx, newsSlug)
 	if err != nil {
-		slog.Warn("News detail not found", slog.String("slug", newsSlug))
-		return c.Status(404).JSON(ErrorResponse{
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("public.news_detail.timeout", slog.String("slug", newsSlug))
+			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+				Code:    "ERR_TIMEOUT",
+				Message: "Server sedang sibuk",
+			})
+		}
+		slog.Warn("public.news_detail.not_found", slog.String("slug", newsSlug))
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
-			Message: "Berita yang Anda cari tidak ditemukan.",
-			Action:  "Berita mungkin sudah dihapus atau link kadaluarsa.",
+			Message: "Berita yang dicari tidak ditemukan",
+			Action:  "Berita mungkin sudah dihapus atau link kadaluarsa",
 		})
 	}
 
 	response := PublicNewsDetail{
 		ID:            pgUUIDToStr(data.ID),
 		Title:         data.Title,
+		Slug:          data.Slug,
 		Description:   data.Description,
 		ReferenceLink: pgTextToStr(data.ReferenceLink),
 		ImageUrl:      data.ImageUrl,
@@ -361,11 +390,6 @@ func (h *HoaxHandler) GetPublicNewsDetailBySlug(c fiber.Ctx) error {
 		PublishedAt:   data.PublishedAt.Time.Format("02 Jan 2006 15:04 WIB"),
 	}
 
-	res := SuccessResponse{
-		Pesan: "Detail Berita",
-		Data:  response,
-	}
-
-	cache.GlobalCache.Set(cacheKey, res, CacheTTLDetail)
-	return c.JSON(res)
+	res := SuccessResponse{Pesan: "Detail Berita", Data: response}
+	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
 }
