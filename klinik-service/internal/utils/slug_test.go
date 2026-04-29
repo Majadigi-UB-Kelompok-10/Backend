@@ -8,7 +8,7 @@ import (
 
 var (
 	slugFormat   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	suffixFormat = regexp.MustCompile(`-[a-f0-9]{8}$`) // 8-char hex (4 bytes)
+	suffixFormat = regexp.MustCompile(`-[a-f0-9]{8}$`) 
 )
 
 func TestGenerateSlug_OutputFormat(t *testing.T) {
@@ -25,7 +25,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 		t.Run(title, func(t *testing.T) {
 			slug := GenerateSlug(title)
 
-			// Format check: must match slug pattern (lowercase, alphanumeric, dash-separated)
 			if !slugFormat.MatchString(slug) {
 				t.Errorf("GenerateSlug(%q) = %q does not match slug format", title, slug)
 			}
@@ -35,7 +34,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 				t.Errorf("GenerateSlug(%q) = %q is too long (%d chars)", title, slug, len(slug))
 			}
 
-			// Suffix check: must end with -<8 hex chars>
 			if !suffixFormat.MatchString(slug) {
 				t.Errorf("GenerateSlug(%q) = %q missing 8-char hex suffix", title, slug)
 			}
@@ -44,7 +42,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 }
 
 func TestGenerateSlug_FallbackForEmpty(t *testing.T) {
-	// All non-alphanumeric input should fall back to "berita-XXXXXXXX"
 	tests := []string{"", "   ", "!!!", "🎉🎉🎉"}
 
 	for _, title := range tests {
@@ -58,8 +55,7 @@ func TestGenerateSlug_FallbackForEmpty(t *testing.T) {
 }
 
 func TestGenerateSlug_HasRandomSuffix(t *testing.T) {
-	// Verify random suffix is actually random (not deterministic).
-	// Generate slug 10 times from same title — at least one pair must differ.
+	
 	title := "Same Title"
 
 	differs := false
@@ -77,10 +73,7 @@ func TestGenerateSlug_HasRandomSuffix(t *testing.T) {
 		t.Errorf("GenerateSlug returned same slug 10 times in a row — random suffix not working")
 	}
 
-	// Note: We don't test for "100% unique slugs in N iterations" because
-	// even with 8-char hex suffix (~4.2 billion possibilities), Birthday
-	// Paradox makes collision probabilistically possible at scale.
-	// Real uniqueness is guaranteed by DB UNIQUE constraint on slug column.
+	
 }
 
 func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
@@ -97,9 +90,7 @@ func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
 			if strings.HasPrefix(slug, "-") {
 				t.Errorf("GenerateSlug(%q) = %q starts with hyphen", title, slug)
 			}
-			// Note: slug always ends with random hex suffix, so we can't
-			// directly check "doesn't end with hyphen" — random suffix
-			// guarantees ending is alphanumeric (hex chars).
+
 		})
 	}
 }
