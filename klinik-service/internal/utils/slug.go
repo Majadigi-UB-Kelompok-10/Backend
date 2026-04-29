@@ -35,7 +35,7 @@ func GenerateSlug(title string) string {
 		slug = defaultSlugBase
 	}
 
-	bytes := make([]byte, 2)
+	bytes := make([]byte, 4)
 	_, _ = rand.Read(bytes)
 	return slug + "-" + hex.EncodeToString(bytes)
 }
