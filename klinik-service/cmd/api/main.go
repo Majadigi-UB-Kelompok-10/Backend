@@ -28,13 +28,10 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	// 🚀 Khusus Klinik: Cloudinary
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	// Import Registry Gateway
 	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
-	// 🚀 IMPORT MURNI KLINIK
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
 	"github.com/farildzaky/klinik-service/internal/handlers"
@@ -86,7 +83,7 @@ type Config struct {
 
 func loadConfig() (*Config, error) {
 	cfg := &Config{
-		Port:            getEnv("PORT", "8080"), // Default port Klinik 8080
+		Port:            getEnv("PORT", "8080"), 
 		Environment:     getEnv("ENVIRONMENT", "production"),
 		ShutdownTimeout: getEnvDuration("SHUTDOWN_TIMEOUT", 25*time.Second),
 
@@ -98,10 +95,10 @@ func loadConfig() (*Config, error) {
 		DBQueryTimeout: getEnvDuration("DB_QUERY_TIMEOUT", 5*time.Second),
 
 		RedisURL:      os.Getenv("REDIS_URL"),
-		CloudinaryURL: os.Getenv("CLOUDINARY_URL"), // 🚀 Khusus Klinik
+		CloudinaryURL: os.Getenv("CLOUDINARY_URL"), 
 
 		GatewayDBURL:  os.Getenv("GATEWAY_DATABASE_URL"),
-		ServicePublic: getEnv("SERVICE_PUBLIC_URL", "http://klinik-api:8080/api/v1"), // 🚀 Khusus Klinik
+		ServicePublic: getEnv("SERVICE_PUBLIC_URL", "http://klinik-api:8080/api/v1"), 
 
 		AllowedOrigins: parseList(getEnv("ALLOWED_ORIGINS",
 			"http://localhost:3000,http://localhost:4000,http://localhost:5173")),
@@ -202,7 +199,6 @@ func parseLogLevel(s string) slog.Level {
 // SECURITY — credential masking
 // =============================================================================
 var (
-	// 🚀 Menambahkan cloudinary ke regex filter
 	reConnURI  = regexp.MustCompile(`(postgres|postgresql|redis|amqp|mongodb|mysql|cloudinary)://([^:]+):([^@]+)@`)
 	reKeyValue = regexp.MustCompile(`(?i)(password|passwd|pwd|token|api[_-]?key|secret|authorization)\s*[:=]\s*["']?([^"'\s,}]+)`)
 	reBearer   = regexp.MustCompile(`(?i)bearer\s+([a-zA-Z0-9._\-+/=]+)`)
@@ -337,7 +333,6 @@ func main() {
 
 	rootCtx := context.Background()
 
-	// 1. Database
 	pool, err := newDBPool(rootCtx, cfg)
 	if err != nil {
 		slog.Error("init database failed", slog.String("error", maskSensitiveData(err.Error())))
@@ -345,14 +340,12 @@ func main() {
 	}
 	slog.Info("postgresql terhubung", slog.Int("max_conns", int(cfg.DBMaxConns)))
 
-	// 2. Cache
 	if err := initializeCache(cfg); err != nil {
 		slog.Error("init cache failed", slog.String("error", maskSensitiveData(err.Error())))
 		pool.Close()
 		os.Exit(1)
 	}
 
-	// 3. Cloudinary (Khusus Klinik)
 	var cld *cloudinary.Cloudinary
 	if cfg.CloudinaryURL != "" {
 		c, err := cloudinary.NewFromURL(cfg.CloudinaryURL)
@@ -366,7 +359,6 @@ func main() {
 		slog.Warn("CLOUDINARY_URL kosong, upload gambar akan gagal")
 	}
 
-	// Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
 		JSONEncoder:           sonic.Marshal,
@@ -381,27 +373,22 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
-	// Routes
 	queries := db.New(pool)
 	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld) // 🚀 Sesuaikan dengan struct Klinik
 	routes.SetupRoutes(app, hoaxHandler)
 	slog.Info("routes terkonfigurasi")
 
-	// Cache warmup
 	go hoaxHandler.CacheWarmup()
 
-	// Service registry
 	go func() {
 		registry.AutoRegister(cfg.GatewayDBURL, "klinik", cfg.ServicePublic)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
-	// Pprof
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
 	}
 
-	// Start HTTP server
 	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("listening", slog.String("addr", ":"+cfg.Port))
@@ -412,7 +399,6 @@ func main() {
 		}
 	}()
 
-	// Tunggu signal atau error
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
@@ -481,7 +467,6 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 			return p == "/health" || p == "/ready"
 		},
 		LimitReached: func(c fiber.Ctx) error {
-			// Menggunakan DTO milik Klinik
 			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
 				Code:    "ERR_RATE_LIMIT",
 				Message: "Terlalu banyak permintaan (Global Limit)",
@@ -516,7 +501,6 @@ func globalErrorHandler(cfg *Config) fiber.ErrorHandler {
 			message = err.Error()
 		}
 
-		// Menggunakan DTO milik Klinik
 		return c.Status(code).JSON(handlers.ErrorResponse{
 			Code:    fmt.Sprintf("ERR_%d", code),
 			Message: message,
