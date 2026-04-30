@@ -15,6 +15,12 @@ FROM master_area
 WHERE id = $1
 LIMIT 1;
 
+-- name: GetAreaByName :one
+SELECT id, nama, slug, lat, lng
+FROM master_area
+WHERE nama = $1
+LIMIT 1;
+
 -- =============================================================================
 -- PUBLIC: DESTINASI — list, detail, maps, recommendation
 -- =============================================================================
@@ -293,7 +299,7 @@ INSERT INTO event (
 ) VALUES (
     sqlc.arg('area_id'), sqlc.arg('nama'), sqlc.arg('slug'), sqlc.arg('deskripsi'),
     sqlc.arg('alamat'), sqlc.arg('tanggal_mulai'), sqlc.arg('tanggal_selesai'),
-    sqlc.narg('info_tiket'), sqlc.arg('harga_tiket'),
+    sqlc.arg('info_tiket'), sqlc.arg('harga_tiket'),
     sqlc.arg('gambar_url_thumbnail'), sqlc.arg('gambar_url_hero'),
     sqlc.arg('lat'), sqlc.arg('lng')
 ) RETURNING id, slug;
@@ -307,7 +313,7 @@ UPDATE event SET
     alamat               = sqlc.arg('alamat'),
     tanggal_mulai        = sqlc.arg('tanggal_mulai'),
     tanggal_selesai      = sqlc.arg('tanggal_selesai'),
-    info_tiket           = sqlc.narg('info_tiket'),
+    info_tiket           = sqlc.arg('info_tiket'),
     harga_tiket          = sqlc.arg('harga_tiket'),
     gambar_url_thumbnail = sqlc.arg('gambar_url_thumbnail'),
     gambar_url_hero      = sqlc.arg('gambar_url_hero'),
