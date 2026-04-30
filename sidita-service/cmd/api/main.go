@@ -47,9 +47,7 @@ var (
 	startedAt   = time.Now()
 )
 
-// =============================================================================
-// CONFIG — typed, validated, single source of truth
-// =============================================================================
+
 type Config struct {
 	Port            string
 	Environment     string
