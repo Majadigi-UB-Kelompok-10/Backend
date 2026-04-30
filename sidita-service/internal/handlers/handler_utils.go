@@ -147,6 +147,7 @@ func buildPaginationMeta(page, limit int, totalData int64) *PaginationMeta {
 // =============================================================================
 
 const maxImageSizeBytes = 2 * 1024 * 1024 
+func uploadImage(
 	ctx context.Context,
 	cld *cloudinary.Cloudinary,
 	fileHeader *multipart.FileHeader,
