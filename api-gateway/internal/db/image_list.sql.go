@@ -12,8 +12,8 @@ import (
 )
 
 const createImage = `-- name: CreateImage :one
-INSERT INTO image_list (service_list_id, image_url, semantic_label) 
-VALUES ($1, $2, $3) 
+INSERT INTO image_list (service_list_id, image_url, semantic_label)
+VALUES ($1, $2, $3)
 RETURNING image_list_id, service_list_id, image_url, semantic_label, created_at
 `
 
@@ -37,7 +37,7 @@ func (q *Queries) CreateImage(ctx context.Context, arg CreateImageParams) (Image
 }
 
 const deleteImage = `-- name: DeleteImage :exec
-DELETE FROM image_list 
+DELETE FROM image_list
 WHERE image_list_id = $1
 `
 
@@ -46,8 +46,39 @@ func (q *Queries) DeleteImage(ctx context.Context, imageListID pgtype.UUID) erro
 	return err
 }
 
+const getAllImages = `-- name: GetAllImages :many
+SELECT image_list_id, service_list_id, image_url, semantic_label, created_at FROM image_list
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllImages(ctx context.Context) ([]ImageList, error) {
+	rows, err := q.db.Query(ctx, getAllImages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ImageList
+	for rows.Next() {
+		var i ImageList
+		if err := rows.Scan(
+			&i.ImageListID,
+			&i.ServiceListID,
+			&i.ImageUrl,
+			&i.SemanticLabel,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getImageById = `-- name: GetImageById :one
-SELECT image_list_id, service_list_id, image_url, semantic_label, created_at FROM image_list 
+SELECT image_list_id, service_list_id, image_url, semantic_label, created_at FROM image_list
 WHERE image_list_id = $1 LIMIT 1
 `
 
@@ -65,8 +96,8 @@ func (q *Queries) GetImageById(ctx context.Context, imageListID pgtype.UUID) (Im
 }
 
 const listImagesByServiceId = `-- name: ListImagesByServiceId :many
-SELECT image_list_id, service_list_id, image_url, semantic_label, created_at FROM image_list 
-WHERE service_list_id = $1 
+SELECT image_list_id, service_list_id, image_url, semantic_label, created_at FROM image_list
+WHERE service_list_id = $1
 ORDER BY created_at DESC
 `
 
@@ -97,9 +128,9 @@ func (q *Queries) ListImagesByServiceId(ctx context.Context, serviceListID pgtyp
 }
 
 const updateImage = `-- name: UpdateImage :one
-UPDATE image_list 
-SET image_url = $2, semantic_label = $3 
-WHERE image_list_id = $1 
+UPDATE image_list
+SET image_url = $2, semantic_label = $3
+WHERE image_list_id = $1
 RETURNING image_list_id, service_list_id, image_url, semantic_label, created_at
 `
 
