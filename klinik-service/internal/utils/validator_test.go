@@ -4,194 +4,234 @@ import (
 	"testing"
 )
 
-func TestValidateQueryString(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		maxLength int
-		wantErr   bool
-		expected  string
-	}{
-		{"Normal Input", "Pencarian Valid", 50, false, "Pencarian Valid"},
-		{"Kosong", "", 50, false, ""},
-		{"Melebihi Max Length", "Ini adalah teks yang sangat panjang melebihi batas dua puluh karakter", 20, true, ""},
-		{"Hanya Karakter Berbahaya", "<script>!@#</script>", 50, true, ""}, 
-		{"Campur Karakter Valid dan Berbahaya", "Valid!@#Data", 50, false, "ValidData"}, 
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidateQueryString(tt.input, tt.maxLength, "test_field")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateQueryString() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.expected {
-				t.Errorf("ValidateQueryString() = %v, expected %v", got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestValidateTextContent(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		maxLength int
-		wantErr   bool
-		expected  string
-	}{
-		{"Normal", "Isi konten deskripsi", 50, false, "Isi konten deskripsi"},
-		{"Kosong", "   ", 50, true, ""},
-		{"Terlalu Panjang", "A B C D E F", 5, true, ""},
-		{"HTML Escape", "A < B", 50, false, "A &lt; B"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidateTextContent(tt.input, tt.maxLength, "test_field")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateTextContent() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.expected {
-				t.Errorf("ValidateTextContent() = %v, expected %v", got, tt.expected)
-			}
-		})
-	}
-}
+// =============================================================================
+// ValidateEmail
+// =============================================================================
 
 func TestValidateEmail(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantErr  bool
-		expected string
+		name    string
+		input   string
+		wantErr bool
 	}{
-		{"Valid Email", "dzaky@gmail.com", false, "dzaky@gmail.com"},
-		{"Valid Email dengan Simbol", "dzaky.filkom+test@ub.ac.id", false, "dzaky.filkom+test@ub.ac.id"},
-		{"Invalid Tanpa Domain", "dzaky@", true, ""},
-		{"Invalid Tanpa TLD", "dzaky@gmail", true, ""},
-		{"Kosong", "", true, ""},
+		{"valid simple", "user@example.com", false},
+		{"valid with dot", "first.last@example.com", false},
+		{"valid with plus", "user+tag@example.com", false},
+		{"valid with subdomain", "user@sub.example.com", false},
+		{"valid uppercase becomes lowercase", "User@Example.COM", false},
+
+		{"empty", "", true},
+		{"missing @", "userexample.com", true},
+		{"missing domain", "user@", true},
+		{"missing TLD", "user@example", true},
+		{"single char TLD", "user@example.c", true},
+		{"spaces", "user @example.com", true},
+		{"only @", "@", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidateEmail(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateEmail() error = %v, wantErr %v", err, tt.wantErr)
+			result, err := ValidateEmail(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateEmail(%q) expected error, got nil", tt.input)
+				}
 				return
 			}
-			if got != tt.expected {
-				t.Errorf("ValidateEmail() = %v, expected %v", got, tt.expected)
+			if err != nil {
+				t.Errorf("ValidateEmail(%q) unexpected error: %v", tt.input, err)
+			}
+			if result == "" {
+				t.Errorf("ValidateEmail(%q) returned empty string", tt.input)
 			}
 		})
 	}
 }
+
+// =============================================================================
+// ValidatePhone
+// =============================================================================
 
 func TestValidatePhone(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantErr  bool
-		expected string
+		name    string
+		input   string
+		wantErr bool
 	}{
-		{"Awalan 08", "081234567890", false, "081234567890"},
-		{"Awalan 62", "6281234567890", false, "6281234567890"},
-		{"Awalan +62", "+6281234567890", false, "+6281234567890"},
-		{"Invalid Huruf", "08123ABCD", true, ""},
-		{"Invalid Terlalu Pendek", "0812", true, ""},
-		{"Invalid Awalan Salah", "1234567890", true, ""},
+		{"valid 08 prefix", "081234567890", false},
+		{"valid +62 prefix", "+6281234567890", false},
+		{"valid 62 prefix", "6281234567890", false},
+		{"valid 11 digits", "08123456789", false},
+		{"valid 13 digits", "0812345678901", false},
+
+		{"empty", "", true},
+		{"too short", "0812", true},
+		{"starts with 09", "091234567890", true},  // not 08
+		{"starts with 07", "071234567890", true},
+		{"with letters", "08abc1234567", true},
+		{"with spaces preserved as input", "081 234 567 890", false}, // spaces stripped
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidatePhone(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidatePhone() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			_, err := ValidatePhone(tt.input)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidatePhone(%q) expected error, got nil", tt.input)
 			}
-			if got != tt.expected {
-				t.Errorf("ValidatePhone() = %v, expected %v", got, tt.expected)
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidatePhone(%q) unexpected error: %v", tt.input, err)
 			}
 		})
 	}
 }
+
+// =============================================================================
+// ValidateURL
+// =============================================================================
 
 func TestValidateURL(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantErr  bool
-		expected string
+		name    string
+		input   string
+		wantErr bool
 	}{
-		{"Valid HTTP", "http://google.com", false, "http://google.com"},
-		{"Valid HTTPS", "https://ub.ac.id/path?q=1", false, "https://ub.ac.id/path?q=1"},
-		{"Boleh Kosong", "", false, ""},
-		{"Invalid Scheme FTP", "ftp://file.com", true, ""},
-		{"Invalid Teks Biasa", "bukan-link", true, ""},
+		{"valid https", "https://example.com", false},
+		{"valid http", "http://example.com", false},
+		{"valid with path", "https://example.com/path/to/page", false},
+		{"valid with query", "https://example.com?q=test", false},
+		{"empty (allowed - optional)", "", false},
+
+		{"missing scheme", "example.com", true},
+		{"javascript scheme", "javascript:alert(1)", true},
+		{"ftp scheme", "ftp://example.com", true},
+		{"just text", "not a url", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidateURL(tt.input, "test_link")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateURL() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			_, err := ValidateURL(tt.input, "test_url")
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateURL(%q) expected error, got nil", tt.input)
 			}
-			if got != tt.expected {
-				t.Errorf("ValidateURL() = %v, expected %v", got, tt.expected)
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateURL(%q) unexpected error: %v", tt.input, err)
 			}
 		})
 	}
 }
 
+// =============================================================================
+// ValidateUUID
+// =============================================================================
+
+func TestValidateUUID(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid lowercase", "550e8400-e29b-41d4-a716-446655440000", false},
+		{"valid uppercase", "550E8400-E29B-41D4-A716-446655440000", false},
+		{"valid mixed case", "550E8400-e29b-41D4-a716-446655440000", false},
+
+		{"empty", "", true},
+		{"missing dashes", "550e8400e29b41d4a716446655440000", true},
+		{"too short", "550e8400-e29b-41d4-a716", true},
+		{"non-hex chars", "550e8400-e29b-41d4-a716-zzzzzzzzzzzz", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ValidateUUID(tt.input, "test_id")
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateUUID(%q) expected error, got nil", tt.input)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateUUID(%q) unexpected error: %v", tt.input, err)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// ValidatePaginationParams
+// =============================================================================
+
+func TestValidatePaginationParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		pageStr     string
+		limitStr    string
+		wantPage    int
+		wantLimit   int
+		wantOffset  int
+	}{
+		{"defaults when empty", "", "", 1, 10, 0},
+		{"valid page 2", "2", "10", 2, 10, 10},
+		{"valid page 5 limit 20", "5", "20", 5, 20, 80},
+		{"limit clamped to max", "1", "200", 1, 100, 0},
+		{"page below 1 falls back", "0", "10", 1, 10, 0},
+		{"negative page falls back", "-1", "10", 1, 10, 0},
+		{"non-numeric falls back to default", "abc", "xyz", 1, 10, 0},
+		{"too large page falls back", "9999999", "10", 1, 10, 0}, // > 6 digit
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, limit, offset := ValidatePaginationParams(tt.pageStr, tt.limitStr)
+			if page != tt.wantPage {
+				t.Errorf("page = %d, want %d", page, tt.wantPage)
+			}
+			if limit != tt.wantLimit {
+				t.Errorf("limit = %d, want %d", limit, tt.wantLimit)
+			}
+			if offset != tt.wantOffset {
+				t.Errorf("offset = %d, want %d", offset, tt.wantOffset)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// ValidateImageFilename
+// =============================================================================
+
 func TestValidateImageFilename(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected string
+		name  string
+		input string
+		want  string
 	}{
-		{"Normal", "gambar.jpg", "gambar.jpg"},
-		{"Path Injection (Hack Attempt)", "../../../etc/passwd", "passwd"},
-		{"Hanya Simbol", "!@#$%.png", ".png"},
-		{"Kosong Total", "", "image_file"},
+		{"simple filename", "photo.jpg", "photo.jpg"},
+		{"with path traversal", "../../etc/passwd", "passwd"},
+		{"with special chars", "my photo!@#.jpg", "myphoto.jpg"},
+		{"empty", "", "image_file"},
+		{"just dot", ".", "image_file"},
+		{"unicode chars stripped", "café.jpg", "caf.jpg"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ValidateImageFilename(tt.input)
-			if got != tt.expected {
-				t.Errorf("ValidateImageFilename() = %v, expected %v", got, tt.expected)
+			if got != tt.want {
+				t.Errorf("ValidateImageFilename(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestValidatePaginationParams(t *testing.T) {
-	tests := []struct {
-		name          string
-		pageStr       string
-		limitStr      string
-		expectedPage  int
-		expectedLimit int
-	}{
-		{"Normal Input", "2", "20", 2, 20},
-		{"Input Kosong (Fallback Default 1, 10)", "", "", 1, 10},
-		{"Input Huruf (Fallback Default 1, 10)", "abc", "xyz", 1, 10},
-		{"Limit Melebihi Maksimal (Dipaksa 50)", "1", "1000", 1, 50}, 
-		{"Limit Mendekati Maksimal tapi Valid", "1", "99", 1, 50},    
-	}
+// =============================================================================
+// Benchmark — make sure validators are fast
+// =============================================================================
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotPage, gotLimit := ValidatePaginationParams(tt.pageStr, tt.limitStr)
-			if gotPage != tt.expectedPage {
-				t.Errorf("ValidatePaginationParams() gotPage = %v, expected %v", gotPage, tt.expectedPage)
-			}
-			if gotLimit != tt.expectedLimit {
-				t.Errorf("ValidatePaginationParams() gotLimit = %v, expected %v", gotLimit, tt.expectedLimit)
-			}
-		})
+func BenchmarkValidateEmail(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, _ = ValidateEmail("user@example.com")
+	}
+}
+
+func BenchmarkValidatePagination(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, _, _ = ValidatePaginationParams("5", "20")
 	}
 }

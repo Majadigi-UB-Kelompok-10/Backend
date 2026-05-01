@@ -2,50 +2,21 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"math"
-	"net/http"
-	"regexp"
+	"log/slog"
 	"strconv"
 	"strings"
-	// "net/url"
-	"time"
+    "time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
-	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
-	"github.com/gofiber/fiber/v3"
-	"github.com/jackc/pgx/v5/pgtype"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/utils"
+	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/sync/errgroup"
 )
-
-const (
-	ContextQueryTimeout  = 5 * time.Second
-	ContextUploadTimeout = 15 * time.Second
-	ContextDBTimeout     = 5 * time.Second
-)
-
-var slugRegex = regexp.MustCompile(`[^a-z0-9]+`)
-
-func generateSlug(title string) string {
-	slug := strings.ToLower(title)
-	slug = slugRegex.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
-	if slug == "" {
-		slug = "unnamed"
-	}
-	return slug
-}
-
-type BaseResponse struct {
-	Pesan string      `json:"pesan,omitempty"`
-	Error string      `json:"error,omitempty"`
-	Data  interface{} `json:"data,omitempty"`
-	Meta  interface{} `json:"meta,omitempty"`
-}
 
 type DestinasiHandler struct {
 	Queries *db.Queries
@@ -56,229 +27,295 @@ func NewDestinasiHandler(q *db.Queries, cld *cloudinary.Cloudinary) *DestinasiHa
 	return &DestinasiHandler{Queries: q, Cld: cld}
 }
 
-func extractCoordsFromMapsURL(mapsURL string) (string, string) {
-	if strings.Contains(mapsURL, "maps.app.goo.gl") {
-		client := &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		}
-		resp, err := client.Get(mapsURL)
-		if err == nil {
-			mapsURL = resp.Header.Get("Location")
+// =============================================================================
+// CACHE INVALIDATION HELPERS
+// =============================================================================
+
+
+func invalidateDestinasiCache(slugs ...string) {
+	cache.GlobalCache.DeleteByPrefix("destinasi:list:")
+	cache.GlobalCache.DeleteByPrefix("destinasi:maps:")
+	cache.GlobalCache.Delete("destinasi:recommendation")
+	for _, s := range slugs {
+		if s != "" {
+			cache.GlobalCache.Delete("destinasi:detail:" + s)
 		}
 	}
-
-	re := regexp.MustCompile(`@(-?\d+\.\d+),(-?\d+\.\d+)`)
-	matches := re.FindStringSubmatch(mapsURL)
-
-	if len(matches) >= 3 {
-		return matches[1], matches[2]
-	}
-	return "", ""
 }
 
-// =====================================================================
-// 1. GET ALL AREA
-// =====================================================================
+// =============================================================================
+// PUBLIC: GET ALL AREA 
+// =============================================================================
+
 func (h *DestinasiHandler) GetAllArea(c fiber.Ctx) error {
 	cacheKey := "areas:all"
-    if cachedBytes, ok := cache.GlobalCache.Get(cacheKey); ok {
-        c.Set("Content-Type", "application/json") 
-        return c.Send(cachedBytes) 
-    }
+	if respondCached(c, cacheKey) {
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
 	areas, err := h.Queries.GetAllArea(ctx)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil daftar area"})
+		slog.Error("public.areas.error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal mengambil daftar area",
+		})
 	}
 
-	response := BaseResponse{
-		Pesan: "Berhasil mengambil daftar area",
-		Data:  areas,
-	}
-
-	cache.GlobalCache.Set(cacheKey, response)
-	return c.JSON(response)
+	res := SuccessResponse{Pesan: "Daftar Area", Data: areas}
+	return cacheJSON(c, cacheKey, CacheTTLArea, res)
 }
 
-// =====================================================================
-// 2. GET ALL DESTINASI (Single Smart Search Bar)
-// =====================================================================
+// =============================================================================
+// PUBLIC: LIST DESTINASI 
+// =============================================================================
+
 func (h *DestinasiHandler) ListDestinasi(c fiber.Ctx) error {
-    search, errSearch := utils.ValidateQueryString(c.Query("search"), 100, "search")
-    if errSearch != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: errSearch.Message})
-    }
+	page, limit, offset := parsePagination(c)
 
-    kategori, errKat := utils.ValidateQueryString(c.Query("kategori"), 50, "kategori")
-    if errKat != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: errKat.Message})
-    }
-
-    page, limit := utils.ValidatePaginationParams(c.Query("page", "1"), c.Query("limit", "10"))
-
-    if page < 1 || limit < 1 || limit > 100 {
-        fmt.Printf("[VALIDATION ERROR] Invalid pagination: page=%d, limit=%d\n", page, limit)
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Parameter pagination tidak valid (page dan limit harus positif, limit max 100)"})
-    }
-
-    cacheKey := fmt.Sprintf("destinasi:list:search_%s:kat_%s:page_%d:limit_%d", search, kategori, page, limit)
-
-    if cachedBytes, ok := cache.GlobalCache.Get(cacheKey); ok {
-        c.Set("Content-Type", "application/json")
-        return c.Send(cachedBytes)
-    }
-
-    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-    defer cancel()
-
-    offset := (page - 1) * limit
-    arg := db.ListDestinasiParams{
-        LimitData:  int32(limit),
-        OffsetData: int32(offset),
-    }
-    countArg := db.CountDestinasiParams{}
-
-    if kategori != "" {
-        arg.Kategori = pgtype.Text{String: kategori, Valid: true}
-        countArg.Kategori = arg.Kategori
-    }
-
-    if search != "" {
-        areaData, errArea := h.Queries.GetAreaByName(ctx, search)
-        if errArea == nil {
-            arg.AreaID = pgtype.Int4{Int32: areaData.ID, Valid: true}
-            countArg.AreaID = arg.AreaID
-        } else {
-            arg.Search = pgtype.Text{String: search, Valid: true}
-            countArg.Search = arg.Search
-        }
-    }
-
-    g, gCtx := errgroup.WithContext(ctx)
-
-    var data []db.ListDestinasiRow
-    var totalData int64
-
-    g.Go(func() error {
-        res, err := h.Queries.ListDestinasi(gCtx, arg)
-        data = res
-        return err
-    })
-
-    g.Go(func() error {
-        res, err := h.Queries.CountDestinasi(gCtx, countArg)
-        totalData = res
-        return err
-    })
-
-    if err := g.Wait(); err != nil {
-        fmt.Printf("[DATABASE ERROR] ListDestinasi failed - Search: %s, Kategori: %s, Error: %v\n", search, kategori, err)
-        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil data destinasi dari database"})
-    }
-
-    if data == nil {
-        data = []db.ListDestinasiRow{}
-    }
-
-    if len(data) == 0 {
-        fmt.Printf("[INFO] No destinasi found - Search: %s, Kategori: %s\n", search, kategori)
-    }
-
-    totalPages := int(math.Ceil(float64(totalData) / float64(limit)))
-
-    pesan := "Berhasil mengambil data destinasi"
-    if totalData == 0 {
-        pesan = "Tidak ada data destinasi yang ditemukan sesuai kriteria pencarian"
-    }
-
-    response := BaseResponse{
-        Pesan: pesan,
-        Data:  data,
-        Meta: struct {
-            Page       int   `json:"page"`
-            Limit      int   `json:"limit"`
-            TotalData  int64 `json:"total_data"`
-            TotalPages int   `json:"total_pages"`
-        }{
-            Page:       page,
-            Limit:      limit,
-            TotalData:  totalData,
-            TotalPages: totalPages,
-        },
-    }
-
-    cache.GlobalCache.Set(cacheKey, response)
-
-    return c.JSON(response)
-}
-
-// =====================================================================
-// 3. GET DETAIL DESTINASI
-// =====================================================================
-func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
-	slug := c.Params("slug")
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Slug destinasi tidak valid!"})
+	keyword, errKw := utils.ValidateQueryString(c.Query("search"), 100, "search")
+	if errKw != nil {
+		return validationErrorResponse(c, errKw)
 	}
 
-	cacheKey := fmt.Sprintf("destinasi:detail:%s", slug)
-	if cachedBytes, ok := cache.GlobalCache.Get(cacheKey); ok {
-		c.Set("Content-Type", "application/json")
-		return c.Send(cachedBytes)
+	areaName, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
+	if errArea != nil {
+		return validationErrorResponse(c, errArea)
+	}
+
+	cacheKey := fmt.Sprintf("destinasi:list:area_%s:keyword_%s:page_%d:limit_%d",
+		normalizeKey(areaName), normalizeKey(keyword), page, limit)
+	if respondCached(c, cacheKey) {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	destinasiUtama, err := h.Queries.GetDestinasiBySlug(ctx, slug)
-	if err != nil {
-		if err.Error() == "no rows in result set" {
-			fmt.Printf("[INFO] Destinasi not found - Slug: %s\n", slug)
-			return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Destinasi tidak ditemukan!"})
+	var areaIDArg pgtype.Int4
+	if areaName != "" {
+		area, err := h.Queries.GetAreaByName(ctx, areaName)
+		if err == nil {
+			areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
+		} else {
+			areaIDArg = pgtype.Int4{Int32: -1, Valid: true}
 		}
-		fmt.Printf("[DATABASE ERROR] GetDetailDestinasi failed - Slug: %s, Error: %v\n", slug, err)
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil detail destinasi"})
 	}
 
-	galeri, _ := h.Queries.ListDestinasiGambar(ctx, destinasiUtama.ID)
-	if galeri == nil {
-		galeri = []db.ListDestinasiGambarRow{}
+	var keywordArg pgtype.Text
+	if keyword != "" {
+		keywordArg = pgtype.Text{String: keyword, Valid: true}
 	}
 
-	vLat, _ := destinasiUtama.Lat.Value()
-	vLng, _ := destinasiUtama.Lng.Value()
-
-	gmapsURL := ""
-	if vLat != nil && vLng != nil {
-		gmapsURL = fmt.Sprintf("https://www.google.com/maps/dir/?api=1&destination=%v,%v", vLat, vLng)
+	listArg := db.ListDestinasiParams{
+		AreaID:     areaIDArg,
+		Keyword:    keywordArg,
+		LimitData:  int32(limit),
+		OffsetData: int32(offset),
+	}
+	countArg := db.CountDestinasiParams{
+		AreaID:  areaIDArg,
+		Keyword: keywordArg,
 	}
 
-	response := BaseResponse{
-		Pesan: "Berhasil mengambil detail destinasi",
-		Data: struct {
-			Destinasi db.GetDestinasiBySlugRow    `json:"destinasi"`
-			GmapsURL  string                      `json:"gmaps_url"` 
-			Galeri    []db.ListDestinasiGambarRow `json:"galeri"`
-		}{
-			Destinasi: destinasiUtama,
-			GmapsURL:  gmapsURL, 
-			Galeri:    galeri,
-		},
+	g, gCtx := errgroup.WithContext(ctx)
+	var data []db.ListDestinasiRow
+	var total int64
+
+	g.Go(func() error {
+		var err error
+		data, err = h.Queries.ListDestinasi(gCtx, listArg)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		total, err = h.Queries.CountDestinasi(gCtx, countArg)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		slog.Error("public.destinasi.list_error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal mengambil data destinasi",
+		})
 	}
 
-	cache.GlobalCache.Set(cacheKey, response)
+	if data == nil {
+		data = []db.ListDestinasiRow{}
+	}
 
-	return c.JSON(response)
+	res := SuccessResponse{
+		Pesan:      "Daftar Destinasi",
+		Data:       data,
+		Pagination: buildPaginationMeta(page, limit, total),
+	}
+	return cacheJSON(c, cacheKey, CacheTTLList, res)
 }
 
-// =====================================================================
-// 4. CREATE DESTINASI
-// =====================================================================
+// =============================================================================
+// PUBLIC: GET DETAIL DESTINASI by SLUG
+// =============================================================================
+
+func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
+	slug := strings.TrimSpace(c.Params("slug"))
+	if slug == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "Slug destinasi tidak valid",
+		})
+	}
+
+	cacheKey := "destinasi:detail:" + slug
+	if respondCached(c, cacheKey) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetDestinasiBySlug(ctx, slug)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+				Code:    "ERR_TIMEOUT",
+				Message: "Server sedang sibuk",
+			})
+		}
+		slog.Warn("public.destinasi.detail_not_found", slog.String("slug", slug))
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Destinasi tidak ditemukan",
+		})
+	}
+
+	res := SuccessResponse{Pesan: "Detail Destinasi", Data: DestinasiDetailResponse{Destinasi: data}}
+	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
+}
+
+// =============================================================================
+// PUBLIC: GET DESTINASI MAPS 
+// =============================================================================
+
+func (h *DestinasiHandler) GetDestinasiMaps(c fiber.Ctx) error {
+	areaName, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
+	if errArea != nil {
+		return validationErrorResponse(c, errArea)
+	}
+
+	cacheKey := "destinasi:maps:area_" + normalizeKey(areaName)
+	if respondCached(c, cacheKey) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	center := MapsCenter{
+		Lat:  "-7.697739",
+		Lng:  "112.493863",
+		Zoom: 8,
+	}
+
+	var areaIDArg pgtype.Int4
+	if areaName != "" {
+		area, err := h.Queries.GetAreaByName(ctx, areaName)
+		if err == nil {
+			areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
+			center.Lat = area.Lat
+			center.Lng = area.Lng
+			center.Zoom = 11
+		}
+	}
+
+    data, err := h.Queries.ListDestinasiMaps(ctx, areaIDArg)
+	if err != nil {
+		slog.Error("public.destinasi.maps_error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal mengambil data peta destinasi",
+		})
+	}
+
+	if data == nil {
+		data = []db.ListDestinasiMapsRow{}
+	}
+
+	res := SuccessResponse{
+		Pesan: "Peta Destinasi",
+		Data: DestinasiMapsResponse{
+			Center: center,
+			Points: data,
+		},
+	}
+	return cacheJSON(c, cacheKey, CacheTTLMaps, res)
+}
+
+// =============================================================================
+// PUBLIC: RECOMMENDATION 
+// =============================================================================
+
+func (h *DestinasiHandler) GetRecommendationDestinasi(c fiber.Ctx) error {
+	cacheKey := "destinasi:recommendation"
+	if respondCached(c, cacheKey) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetRecommendationDestinasi(ctx)
+	if err != nil {
+		slog.Error("public.destinasi.recommendation_error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal mengambil rekomendasi destinasi",
+		})
+	}
+
+	if data == nil {
+		data = []db.GetRecommendationDestinasiRow{}
+	}
+
+	res := SuccessResponse{Pesan: "Rekomendasi Destinasi", Data: DestinasiRecommendationResponse{Items: data}}
+	return cacheJSON(c, cacheKey, CacheTTLRecommendation, res)
+}
+
+// =============================================================================
+// ADMIN: GET DETAIL by ID 
+// =============================================================================
+
+func (h *DestinasiHandler) GetDestinasiByID(c fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "ID destinasi tidak valid",
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetDestinasiByID(ctx, int32(id))
+	if err != nil {
+		slog.Warn("admin.destinasi.not_found", slog.Int("id", id))
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Destinasi tidak ditemukan",
+		})
+	}
+
+	return c.JSON(SuccessResponse{Pesan: "Detail Destinasi", Data: data})
+}
+
+// =============================================================================
+// ADMIN: CREATE DESTINASI
+// =============================================================================
+
 func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 	areaName := strings.TrimSpace(c.FormValue("area"))
 	kategori := strings.TrimSpace(c.FormValue("kategori"))
@@ -286,482 +323,378 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 	deskripsi := strings.TrimSpace(c.FormValue("deskripsi"))
 	alamat := strings.TrimSpace(c.FormValue("alamat"))
 	highlight := strings.TrimSpace(c.FormValue("highlight_text"))
-	mapsURL := strings.TrimSpace(c.FormValue("maps_url"))
-
-	if areaName == "" || nama == "" || kategori == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "Area, Kategori, dan Nama wajib diisi!"})
-	}
-
-	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancelDb()
-
-	areaData, errArea := h.Queries.GetAreaByName(ctxDb, areaName)
-	if errArea != nil {
-		return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Area '" + areaName + "' tidak ditemukan di database!"})
-	}
-
 	latVal := strings.TrimSpace(c.FormValue("lat"))
 	lngVal := strings.TrimSpace(c.FormValue("lng"))
 
-	if mapsURL != "" {
-		exLat, exLng := extractCoordsFromMapsURL(mapsURL)
-		if exLat != "" && exLng != "" {
-			latVal = exLat
-			lngVal = exLng
-		}
+	if err := requireFields(c, map[string]string{
+		"area":      areaName,
+		"kategori":  kategori,
+		"nama":      nama,
+		"deskripsi": deskripsi,
+		"alamat":    alamat,
+		"highlight_text": highlight,
+		"lat":       latVal,
+		"lng":       lngVal,
+	}); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+	defer cancel()
+
+	area, errArea := h.Queries.GetAreaByName(ctx, areaName)
+	if errArea != nil {
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Area '" + areaName + "' tidak ditemukan",
+		})
 	}
 
 	var latPg, lngPg pgtype.Numeric
-	_ = latPg.Scan(latVal)
-	_ = lngPg.Scan(lngVal)
-
-	fileHeader, err := c.FormFile("gambar")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "File gambar wajib diupload!"})
+	if err := latPg.Scan(latVal); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "Format latitude tidak valid",
+		})
 	}
-	if fileHeader.Size > 2*1024*1024 {
-		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(BaseResponse{Error: "Ukuran gambar maksimal 2MB!"})
-	}
-
-	file, errOpen := fileHeader.Open()
-	if errOpen != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal membuka file gambar"})
-	}
-	defer file.Close()
-
-	buffer := make([]byte, 512)
-	file.Read(buffer)
-	file.Seek(0, 0)
-	mimeType := http.DetectContentType(buffer)
-	if mimeType != "image/jpeg" && mimeType != "image/png" && mimeType != "image/webp" {
-		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "File harus berupa gambar asli (JPG/PNG/WEBP)!"})
+	if err := lngPg.Scan(lngVal); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "Format longitude tidak valid",
+		})
 	}
 
-	ctxCld, cancelCld := context.WithTimeout(context.Background(), ContextUploadTimeout)
-	defer cancelCld()
-	resCld, errUpload := h.Cld.Upload.Upload(ctxCld, file, uploader.UploadParams{
-		Folder: "sidita_destinasi",
+	thumbHeader, errT := c.FormFile("gambar_thumbnail")
+	if errT != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "File gambar_thumbnail wajib diupload",
+		})
+	}
+	heroHeader, errH := c.FormFile("gambar_hero")
+	if errH != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "File gambar_hero wajib diupload",
+		})
+	}
+
+	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+	defer cancelUpload()
+
+	thumbURL, thumbPubID, errUpT := uploadImage(uploadCtx, h.Cld, thumbHeader, "sidita_destinasi/thumbnail")
+	if errUpT != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_FILE_UPLOAD",
+			Message: "Gagal upload thumbnail: " + errUpT.Error(),
+		})
+	}
+	heroURL, heroPubID, errUpH := uploadImage(uploadCtx, h.Cld, heroHeader, "sidita_destinasi/hero")
+	if errUpH != nil {
+		destroyImageAsync(h.Cld, thumbPubID)
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_FILE_UPLOAD",
+			Message: "Gagal upload hero: " + errUpH.Error(),
+		})
+	}
+
+	slugBaru := utils.GenerateSlug(nama)
+
+	idBaru, errDb := h.Queries.CreateDestinasi(ctx, db.CreateDestinasiParams{
+		AreaID:               area.ID,
+		Nama:                 nama,
+		Slug:                 slugBaru,
+		Kategori:             kategori,
+		Deskripsi:            deskripsi,
+		Alamat:               alamat,
+		HighlightText:        pgtype.Text{String: highlight, Valid: highlight != ""},
+		GambarUrlThumbnail:   thumbURL,
+		GambarUrlHero:        heroURL,
+		Lat:                  latPg,
+		Lng:                  lngPg,
 	})
-	if errUpload != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal upload gambar ke Cloudinary!"})
-	}
-
-	slugBaru := generateSlug(nama)
-
-	arg := db.CreateDestinasiParams{
-		AreaID:        areaData.ID,
-		Kategori:      kategori,
-		Nama:          nama,
-		Slug:          slugBaru,
-		GambarUrl:     resCld.SecureURL,
-		Deskripsi:     deskripsi,
-		Alamat:        alamat,
-		HighlightText: highlight,
-		Lat:           latPg,
-		Lng:           lngPg,
-	}
-
-	idBaru, errDb := h.Queries.CreateDestinasi(ctxDb, arg)
 	if errDb != nil {
-		go func(publicID string) {
-			ctxHapus, cancelHapus := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancelHapus()
-			h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: publicID})
-		}(resCld.PublicID)
+		destroyImageAsync(h.Cld, thumbPubID)
+		destroyImageAsync(h.Cld, heroPubID)
 
-		if strings.Contains(errDb.Error(), "duplicate key value violates unique constraint") {
-			return c.Status(fiber.StatusConflict).JSON(BaseResponse{Error: "Destinasi dengan nama ini sudah ada!"})
+		if strings.Contains(errDb.Error(), "duplicate key") {
+			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+				Code:    "ERR_CONFLICT",
+				Message: "Destinasi dengan nama atau slug ini sudah ada",
+			})
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal menyimpan ke database."})
+		slog.Error("admin.destinasi.create_error", slog.String("err", errDb.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal menyimpan destinasi",
+		})
 	}
 
-	cache.GlobalCache.DeleteByPrefix("destinasi:list:")
+	invalidateDestinasiCache()
+	slog.Info("admin.destinasi.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
-	return c.Status(fiber.StatusCreated).JSON(BaseResponse{
-		Pesan: "Destinasi berhasil disimpan!",
-		Data: struct {
-			ID        int32  `json:"id"`
-			Nama      string `json:"nama"`
-			Slug      string `json:"slug"`
-			Kota      string `json:"kota"`
-			Lat       string `json:"lat"`
-			Lng       string `json:"lng"`
-			GambarURL string `json:"gambar_url"`
-		}{
-			ID:        idBaru.ID,
-			Nama:      nama,
-			Slug:      slugBaru,
-			Kota:      areaData.Nama,
-			Lat:       latVal,
-			Lng:       lngVal,
-			GambarURL: resCld.SecureURL,
+	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
+		Pesan: "Destinasi berhasil disimpan",
+		Data: DestinasiActionResponse{
+			ID:                 idBaru.ID,
+			Nama:               nama,
+			Slug:               slugBaru,
+			Kota:               area.Nama,
+			Lat:                latVal,
+			Lng:                lngVal,
+			GambarUrlThumbnail: thumbURL,
+			GambarUrlHero:      heroURL,
 		},
 	})
 }
 
-// =====================================================================
-// 5. UPDATE DESTINASI (Partial Update / Opsional)
-// =====================================================================
+// =============================================================================
+// ADMIN: UPDATE DESTINASI 
+// =============================================================================
+
 func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
-    idStr := c.Params("id")
-    idDestinasi, errId := strconv.Atoi(idStr)
-    if errId != nil || idDestinasi <= 0 {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
-    }
-
-    ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
-    defer cancelDb()
-
-    dataLama, errCari := h.Queries.GetDestinasiByID(ctxDb, int32(idDestinasi))
-    if errCari != nil {
-        return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Destinasi tidak ditemukan!"})
-    }
-
-    areaName := strings.TrimSpace(c.FormValue("area"))
-    kategori := strings.TrimSpace(c.FormValue("kategori"))
-    nama := strings.TrimSpace(c.FormValue("nama"))
-    deskripsi := strings.TrimSpace(c.FormValue("deskripsi"))
-    alamat := strings.TrimSpace(c.FormValue("alamat"))
-    highlight := strings.TrimSpace(c.FormValue("highlight_text"))
-    mapsURL := strings.TrimSpace(c.FormValue("maps_url"))
-
-    finalAreaID := dataLama.AreaID
-    finalKategori := dataLama.Kategori
-    finalNama := dataLama.Nama
-    finalSlug := dataLama.Slug
-    finalDeskripsi := dataLama.Deskripsi
-    finalAlamat := dataLama.Alamat
-    finalHighlight := dataLama.HighlightText
-    finalLat := dataLama.Lat
-    finalLng := dataLama.Lng
-
-    if areaName != "" {
-        areaData, errArea := h.Queries.GetAreaByName(ctxDb, areaName)
-        if errArea != nil {
-            return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Area '" + areaName + "' tidak ditemukan di database!"})
-        }
-        finalAreaID = areaData.ID
-    }
-
-    if kategori != "" {
-        finalKategori = kategori
-    }
-
-    if nama != "" {
-        finalNama = nama
-        finalSlug = generateSlug(nama) 
-    }
-
-    if deskripsi != "" {
-        finalDeskripsi = deskripsi
-    }
-
-    if alamat != "" {
-        finalAlamat = alamat
-    }
-
-    if highlight != "" {
-        finalHighlight = highlight
-    }
-
-    latVal := strings.TrimSpace(c.FormValue("lat"))
-    lngVal := strings.TrimSpace(c.FormValue("lng"))
-
-    if mapsURL != "" {
-        exLat, exLng := extractCoordsFromMapsURL(mapsURL)
-        if exLat != "" && exLng != "" {
-            _ = finalLat.Scan(exLat)
-            _ = finalLng.Scan(exLng)
-        }
-    } else if latVal != "" && lngVal != "" {
-        _ = finalLat.Scan(latVal)
-        _ = finalLng.Scan(lngVal)
-    }
-
-    gambarUrlFinal := dataLama.GambarUrl
-    var publicIDGambarBaru string
-
-    fileHeader, errFile := c.FormFile("gambar")
-    if errFile == nil {
-        if fileHeader.Size > 2*1024*1024 {
-            return c.Status(fiber.StatusRequestEntityTooLarge).JSON(BaseResponse{Error: "Ukuran gambar maksimal 2MB!"})
-        }
-        file, errOpen := fileHeader.Open()
-        if errOpen == nil {
-            defer file.Close()
-            ctxCld, cancelCld := context.WithTimeout(context.Background(), ContextUploadTimeout)
-            defer cancelCld()
-            resCld, errUpload := h.Cld.Upload.Upload(ctxCld, file, uploader.UploadParams{
-                Folder: "sidita_destinasi",
-            })
-            if errUpload == nil {
-                gambarUrlFinal = resCld.SecureURL 
-                publicIDGambarBaru = resCld.PublicID
-            }
-        }
-    }
-
-    arg := db.UpdateDestinasiParams{
-        ID:            dataLama.ID,
-        AreaID:        finalAreaID,
-        Kategori:      finalKategori,
-        Nama:          finalNama,
-        Slug:          finalSlug,
-        GambarUrl:     gambarUrlFinal,
-        Deskripsi:     finalDeskripsi,
-        Alamat:        finalAlamat,
-        HighlightText: finalHighlight,
-        Lat:           finalLat,
-        Lng:           finalLng,
-    }
-
-    resDb, errUpdate := h.Queries.UpdateDestinasi(ctxDb, arg)
-    if errUpdate != nil {
-        if publicIDGambarBaru != "" {
-            go func() {
-                h.Cld.Upload.Destroy(context.Background(), uploader.DestroyParams{PublicID: publicIDGambarBaru})
-            }()
-        }
-        if strings.Contains(errUpdate.Error(), "duplicate key value violates unique constraint") {
-            return c.Status(fiber.StatusConflict).JSON(BaseResponse{Error: "Destinasi dengan nama ini sudah ada!"})
-        }
-        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengupdate database."})
-    }
-
-    if publicIDGambarBaru != "" && dataLama.GambarUrl != "" {
-        oldPublicID := utils.ExtractPublicID(dataLama.GambarUrl)
-        if oldPublicID != "" {
-            go func() {
-                ctxHapus, cancelHapus := context.WithTimeout(context.Background(), 10*time.Second)
-                defer cancelHapus()
-                h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: oldPublicID})
-            }()
-        }
-    }
-
-    cache.GlobalCache.DeleteByPrefix("destinasi:list:")
-    cache.GlobalCache.Delete(fmt.Sprintf("destinasi:detail:%s", dataLama.Slug))
-    if dataLama.Slug != finalSlug {
-        cache.GlobalCache.Delete(fmt.Sprintf("destinasi:detail:%s", finalSlug))
-    }
-
-    return c.JSON(BaseResponse{
-        Pesan: "Destinasi berhasil diupdate!",
-        Data: struct {
-            ID   int32  `json:"id"`
-            Nama string `json:"nama"`
-            Slug string `json:"slug"`
-        }{
-            ID:   resDb.ID,
-            Nama: resDb.Nama,
-            Slug: resDb.Slug,
-        },
-    })
-}
-
-// =====================================================================
-// 6. DELETE DESTINASI
-// =====================================================================
-func (h *DestinasiHandler) DeleteDestinasi(c fiber.Ctx) error {
-	idStr := c.Params("id")
-	idDestinasi, errId := strconv.Atoi(idStr)
-	if errId != nil || idDestinasi <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: "ID harus berupa angka yang valid!"})
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "ID destinasi tidak valid",
+		})
 	}
 
-	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancelDb()
+	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+	defer cancel()
 
-	dataLama, errCari := h.Queries.GetDestinasiByID(ctxDb, int32(idDestinasi))
+	old, errCari := h.Queries.GetDestinasiByID(ctx, int32(id))
 	if errCari != nil {
-		return c.Status(fiber.StatusNotFound).JSON(BaseResponse{Error: "Destinasi tidak ditemukan!"})
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Destinasi tidak ditemukan",
+		})
 	}
 
-	errHapus := h.Queries.DeleteDestinasi(ctxDb, dataLama.ID)
-	if errHapus != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal menghapus destinasi dari database"})
-	}
+	finalAreaID := old.AreaID
+	finalKategori := old.Kategori
+	finalNama := old.Nama
+	finalSlug := old.Slug
+	finalDeskripsi := old.Deskripsi
+	finalAlamat := old.Alamat
+	finalHighlight := old.HighlightText
+	finalLat := old.Lat
+	finalLng := old.Lng
+	finalThumbURL := old.GambarUrlThumbnail
+	finalHeroURL := old.GambarUrlHero
 
-	if dataLama.GambarUrl != "" {
-		publicID := utils.ExtractPublicID(dataLama.GambarUrl)
-		if publicID != "" {
-			go func() {
-				ctxHapus, cancelHapus := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancelHapus()
-				h.Cld.Upload.Destroy(ctxHapus, uploader.DestroyParams{PublicID: publicID})
-			}()
+	if v := strings.TrimSpace(c.FormValue("area")); v != "" {
+		area, errArea := h.Queries.GetAreaByName(ctx, v)
+		if errArea != nil {
+			return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+				Code:    "ERR_NOT_FOUND",
+				Message: "Area '" + v + "' tidak ditemukan",
+			})
 		}
+		finalAreaID = area.ID
 	}
 
-	cache.GlobalCache.DeleteByPrefix("destinasi:list:")
-	cache.GlobalCache.Delete(fmt.Sprintf("destinasi:detail:%s", dataLama.Slug))
+	if v := strings.TrimSpace(c.FormValue("kategori")); v != "" {
+		finalKategori = v
+	}
+	if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
+		finalNama = v
+		finalSlug = utils.GenerateSlug(v)
+	}
+	if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
+		finalDeskripsi = v
+	}
+	if v := strings.TrimSpace(c.FormValue("alamat")); v != "" {
+		finalAlamat = v
+	}
+	if v := strings.TrimSpace(c.FormValue("highlight_text")); v != "" {
+		finalHighlight = pgtype.Text{String: v, Valid: true}
+	}
+	if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
+		_ = finalLat.Scan(v)
+	}
+	if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
+		_ = finalLng.Scan(v)
+	}
 
-	return c.JSON(BaseResponse{
-		Pesan: "Destinasi beserta gambarnya berhasil dihapus permanen!",
+	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+	defer cancelUpload()
+
+	var newThumbPubID, newHeroPubID string
+	var oldThumbToDelete, oldHeroToDelete string
+
+	if thumbHeader, errT := c.FormFile("gambar_thumbnail"); errT == nil {
+		url, pubID, errUp := uploadImage(uploadCtx, h.Cld, thumbHeader, "sidita_destinasi/thumbnail")
+		if errUp != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Code:    "ERR_FILE_UPLOAD",
+				Message: "Gagal upload thumbnail: " + errUp.Error(),
+			})
+		}
+		newThumbPubID = pubID
+		oldThumbToDelete = utils.ExtractPublicID(old.GambarUrlThumbnail)
+		finalThumbURL = url
+	}
+	if heroHeader, errH := c.FormFile("gambar_hero"); errH == nil {
+		url, pubID, errUp := uploadImage(uploadCtx, h.Cld, heroHeader, "sidita_destinasi/hero")
+		if errUp != nil {
+			destroyImageAsync(h.Cld, newThumbPubID) // rollback thumbnail kalau hero gagal
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Code:    "ERR_FILE_UPLOAD",
+				Message: "Gagal upload hero: " + errUp.Error(),
+			})
+		}
+		newHeroPubID = pubID
+		oldHeroToDelete = utils.ExtractPublicID(old.GambarUrlHero)
+		finalHeroURL = url
+	}
+
+	if err := h.Queries.UpdateDestinasi(ctx, db.UpdateDestinasiParams{
+		ID:                   old.ID,
+		AreaID:               finalAreaID,
+		Nama:                 finalNama,
+		Slug:                 finalSlug,
+		Kategori:             finalKategori,
+		Deskripsi:            finalDeskripsi,
+		Alamat:               finalAlamat,
+		HighlightText:        finalHighlight,
+		GambarUrlThumbnail:   finalThumbURL,
+		GambarUrlHero:        finalHeroURL,
+		Lat:                  finalLat,
+		Lng:                  finalLng,
+	}); err != nil {
+		destroyImageAsync(h.Cld, newThumbPubID)
+		destroyImageAsync(h.Cld, newHeroPubID)
+
+		if strings.Contains(err.Error(), "duplicate key") {
+			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+				Code:    "ERR_CONFLICT",
+				Message: "Destinasi dengan nama atau slug ini sudah ada",
+			})
+		}
+		slog.Error("admin.destinasi.update_error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal mengupdate destinasi",
+		})
+	}
+
+	destroyImageAsync(h.Cld, oldThumbToDelete)
+	destroyImageAsync(h.Cld, oldHeroToDelete)
+
+	invalidateDestinasiCache(old.Slug, finalSlug)
+	slog.Info("admin.destinasi.updated", slog.Int("id", id), slog.String("slug", finalSlug))
+
+	return c.JSON(SuccessResponse{
+		Pesan: "Destinasi berhasil diupdate",
+		Data: DestinasiActionResponse{
+			ID:                 old.ID,
+			Nama:               finalNama,
+			Slug:               finalSlug,
+			GambarUrlThumbnail: finalThumbURL,
+			GambarUrlHero:      finalHeroURL,
+		},
 	})
 }
 
-// =====================================================================
-// 7. CACHE WARMUP DESTINASI
-// =====================================================================
+// =============================================================================
+// ADMIN: DELETE DESTINASI
+// =============================================================================
+
+func (h *DestinasiHandler) DeleteDestinasi(c fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "ID destinasi tidak valid",
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+	defer cancel()
+
+	old, errCari := h.Queries.GetDestinasiByID(ctx, int32(id))
+	if errCari != nil {
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Destinasi tidak ditemukan",
+		})
+	}
+
+	if err := h.Queries.DeleteDestinasi(ctx, old.ID); err != nil {
+		slog.Error("admin.destinasi.delete_error", slog.String("err", err.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal menghapus destinasi",
+		})
+	}
+
+	// Hapus image dari Cloudinary (best-effort)
+	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlThumbnail))
+	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlHero))
+
+	invalidateDestinasiCache(old.Slug)
+	slog.Info("admin.destinasi.deleted", slog.Int("id", id), slog.String("slug", old.Slug))
+
+	return c.JSON(SuccessResponse{Pesan: "Destinasi berhasil dihapus"})
+}
+
+// =============================================================================
+// CACHE WARMUP
+// =============================================================================
+
 func (h *DestinasiHandler) CacheWarmup() {
+	slog.Info("cache.warmup.destinasi.start")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	if areas, err := h.Queries.GetAllArea(ctx); err == nil {
+		cache.GlobalCache.Set("areas:all",
+			SuccessResponse{Pesan: "Daftar Area", Data: areas},
+			CacheTTLArea)
+	}
+
+	if data, err := h.Queries.GetRecommendationDestinasi(ctx); err == nil {
+		if data == nil {
+			data = []db.GetRecommendationDestinasiRow{}
+		}
+		cache.GlobalCache.Set("destinasi:recommendation",
+			SuccessResponse{Pesan: "Rekomendasi Destinasi", Data: DestinasiRecommendationResponse{Items: data}},
+			CacheTTLRecommendation)
+	}
+
 	g, gCtx := errgroup.WithContext(ctx)
-
-	var data []db.ListDestinasiRow
-	var totalData int64
-
-	arg := db.ListDestinasiParams{
-		LimitData:  10,
-		OffsetData: 0,
-	}
-	countArg := db.CountDestinasiParams{}
+	var listData []db.ListDestinasiRow
+	var total int64
 
 	g.Go(func() error {
-		res, err := h.Queries.ListDestinasi(gCtx, arg)
-		data = res
+		var err error
+		listData, err = h.Queries.ListDestinasi(gCtx, db.ListDestinasiParams{
+			LimitData: 10, OffsetData: 0,
+		})
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		total, err = h.Queries.CountDestinasi(gCtx, db.CountDestinasiParams{})
 		return err
 	})
 
-	g.Go(func() error {
-		res, err := h.Queries.CountDestinasi(gCtx, countArg)
-		totalData = res
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		fmt.Printf("[WARMUP ERROR] Cache warmup destinasi failed: %v\n", err)
-		return
+	if err := g.Wait(); err == nil {
+		if listData == nil {
+			listData = []db.ListDestinasiRow{}
+		}
+		warmupKey := "destinasi:list:area_:keyword_:page_1:limit_10"
+		cache.GlobalCache.Set(warmupKey,
+			SuccessResponse{
+				Pesan:      "Daftar Destinasi",
+				Data:       listData,
+				Pagination: buildPaginationMeta(1, 10, total),
+			},
+			CacheTTLList)
 	}
 
-	if data == nil {
-		data = []db.ListDestinasiRow{}
-	}
-
-	if len(data) == 0 {
-		fmt.Printf("[WARMUP INFO] No destinasi data available for cache warmup\n")
-	} else {
-		fmt.Printf("[WARMUP SUCCESS] Cache warmup destinasi completed with %d records\n", len(data))
-	}
-
-	totalPages := int(math.Ceil(float64(totalData) / 10.0))
-
-	response := BaseResponse{
-		Pesan: "Berhasil mengambil data destinasi",
-		Data:  data,
-		Meta: struct {
-			Page       int   `json:"page"`
-			Limit      int   `json:"limit"`
-			TotalData  int64 `json:"total_data"`
-			TotalPages int   `json:"total_pages"`
-		}{
-			Page:       1,
-			Limit:      10,
-			TotalData:  totalData,
-			TotalPages: totalPages,
-		},
-	}
-
-	cacheKey := "destinasi:list:search_:kat_:area_:page_1:limit_10"
-
-	cache.GlobalCache.Set(cacheKey, response)
-	fmt.Println("Cache Warmup Destinasi Selesai!")
-}
-
-// =====================================================================
-// 8. GET DATA PETA DESTINASI (Mengikuti UI UX Frontend)
-// =====================================================================
-func (h *DestinasiHandler) GetDestinasiMaps(c fiber.Ctx) error {
-    slugQuery, errSlug := utils.ValidateQueryString(c.Query("slug"), 100, "slug")
-    if errSlug != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: errSlug.Message})
-    }
-
-    searchQuery, errSearch := utils.ValidateQueryString(c.Query("search"), 100, "search")
-    if errSearch != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(BaseResponse{Error: errSearch.Message})
-    }
-
-    cacheKey := fmt.Sprintf("destinasi:maps:slug_%s:search_%s", slugQuery, searchQuery)
-    if cachedBytes, ok := cache.GlobalCache.Get(cacheKey); ok {
-        c.Set("Content-Type", "application/json")
-        return c.Send(cachedBytes)
-    }
-
-    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-    defer cancel()
-
-    var centerLat, centerLng interface{} = "-7.697739", "112.493863"
-    zoomLevel := 8
-    var areaIDParam pgtype.Int4
-    var searchTextParam pgtype.Text
-
-    if slugQuery != "" {
-        dest, err := h.Queries.GetDestinasiBySlug(ctx, slugQuery)
-        if err == nil {
-            centerLat = dest.Lat
-            centerLng = dest.Lng
-            zoomLevel = 15 
-            areaIDParam = pgtype.Int4{Int32: dest.AreaID, Valid: true} 
-        }
-    } else if searchQuery != "" {
-        areaData, errArea := h.Queries.GetAreaByName(ctx, searchQuery)
-        if errArea == nil {
-            centerLat = areaData.Lat
-            centerLng = areaData.Lng
-            zoomLevel = 11 
-            areaIDParam = pgtype.Int4{Int32: areaData.ID, Valid: true}
-        } else {
-            searchTextParam = pgtype.Text{String: searchQuery, Valid: true}
-        }
-    }
-
-    arg := db.ListDestinasiMapsParams{
-        AreaID: areaIDParam,
-        Search: searchTextParam,
-    }
-
-    data, err := h.Queries.ListDestinasiMaps(ctx, arg)
-    if err != nil {
-        fmt.Printf("[DATABASE ERROR] GetDestinasiMaps failed - Slug: %s, Search: %s, Error: %v\n", slugQuery, searchQuery, err)
-        return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{Error: "Gagal mengambil data peta"})
-    }
-
-    if data == nil {
-        data = []db.ListDestinasiMapsRow{}
-    }
-
-    if searchQuery != "" && slugQuery == "" && searchTextParam.Valid && len(data) > 0 {
-        centerLat = data[0].Lat
-        centerLng = data[0].Lng
-        zoomLevel = 14
-    }
-
-    response := BaseResponse{
-        Pesan: "Berhasil mengambil data peta",
-        Data: struct {
-            Center struct {
-                Lat  interface{} `json:"lat"`
-                Lng  interface{} `json:"lng"`
-                Zoom int         `json:"zoom"`
-            } `json:"center"`
-            Points []db.ListDestinasiMapsRow `json:"points"`
-        }{
-            Center: struct {
-                Lat  interface{} `json:"lat"`
-                Lng  interface{} `json:"lng"`
-                Zoom int         `json:"zoom"`
-            }{
-                Lat:  centerLat,
-                Lng:  centerLng,
-                Zoom: zoomLevel,
-            },
-            Points: data,
-        },
-    }
-
-    cache.GlobalCache.Set(cacheKey, response)
-    return c.JSON(response)
+	slog.Info("cache.warmup.destinasi.done")
 }

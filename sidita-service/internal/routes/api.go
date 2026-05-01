@@ -9,43 +9,90 @@ import (
 	"github.com/farildzaky/sidita-service/internal/handlers"
 )
 
-func SetupRoutes(app *fiber.App, destinasiHandler *handlers.DestinasiHandler, hotelHandler *handlers.HotelHandler, eventHandler *handlers.EventHandler) {
+
+func SetupRoutes(
+	app *fiber.App,
+	destinasiHandler *handlers.DestinasiHandler,
+	hotelHandler *handlers.HotelHandler,
+	eventHandler *handlers.EventHandler,
+) {
 	api := app.Group("/api/v1")
 
-	actionLimiter := limiter.New(limiter.Config{
-		Max:        10,
+	// =========================================================================
+	// LIMITERS
+	// =========================================================================
+
+	strictLimiter := limiter.New(limiter.Config{
+		Max:        30,
 		Expiration: 1 * time.Minute,
 		LimitReached: func(c fiber.Ctx) error {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"error": "Terlalu banyak request. Silakan tunggu 1 menit.",
+			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+				Code:    "ERR_RATE_LIMITED",
+				Message: "Terlalu banyak request admin. Silakan tunggu 1 menit.",
+				Action:  "Mohon tunggu sebelum mencoba lagi",
+			})
+		},
+	})
+
+	searchLimiter := limiter.New(limiter.Config{
+		Max:        50,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+				Code:    "ERR_RATE_LIMITED",
+				Message: "Terlalu banyak request pencarian. Silakan tunggu 1 menit.",
+				Action:  "Mohon tunggu sebelum mencoba lagi",
 			})
 		},
 	})
 
 	api.Get("/", func(c fiber.Ctx) error {
-		return c.SendString("API Sidita v1 Active")
+		return c.JSON(handlers.SuccessResponse{
+			Pesan: "API Sidita v1 Active",
+		})
 	})
 
-	api.Get("/areas", destinasiHandler.GetAllArea)
+	// =========================================================================
+	// PUBLIC GROUP — mobile app + web (read-only)
+	// =========================================================================
 
-	api.Get("/destinasi/maps", destinasiHandler.GetDestinasiMaps)
-	api.Get("/destinasi", destinasiHandler.ListDestinasi)
-	api.Get("/destinasi/:slug", destinasiHandler.GetDetailDestinasi)
-	api.Post("/destinasi", actionLimiter, destinasiHandler.CreateDestinasi)
-	api.Put("/destinasi/:id", actionLimiter, destinasiHandler.UpdateDestinasi)
-	api.Delete("/destinasi/:id", destinasiHandler.DeleteDestinasi)
+	public := api.Group("/public")
 
-	api.Get("/hotel/maps", hotelHandler.GetHotelMaps)
-	api.Get("/hotel", hotelHandler.ListHotel)
-	api.Get("/hotel/:slug", hotelHandler.GetDetailHotel)
-	api.Post("/hotel", actionLimiter, hotelHandler.CreateHotel)
-	api.Put("/hotel/:id", actionLimiter, hotelHandler.UpdateHotel)
-	api.Delete("/hotel/:id", hotelHandler.DeleteHotel)
+	public.Get("/areas", destinasiHandler.GetAllArea)
 
-	api.Get("/event/maps", eventHandler.GetEventMaps)
-	api.Get("/event", eventHandler.ListEvent)
-	api.Get("/event/:slug", eventHandler.GetDetailEvent)
-	api.Post("/event", actionLimiter, eventHandler.CreateEvent)
-	api.Put("/event/:id", actionLimiter, eventHandler.UpdateEvent)
-	api.Delete("/event/:id", eventHandler.DeleteEvent)
+	public.Get("/destinasi", searchLimiter, destinasiHandler.ListDestinasi)
+	public.Get("/destinasi/maps", destinasiHandler.GetDestinasiMaps)
+	public.Get("/destinasi/recommendation", destinasiHandler.GetRecommendationDestinasi)
+	public.Get("/destinasi/:slug", destinasiHandler.GetDetailDestinasi)
+
+	public.Get("/hotel", searchLimiter, hotelHandler.ListHotel)
+	public.Get("/hotel/maps", hotelHandler.GetHotelMaps)
+	public.Get("/hotel/recommendation", hotelHandler.GetRecommendationHotel)
+
+	public.Get("/event", searchLimiter, eventHandler.ListEvent)
+	public.Get("/event/maps", eventHandler.GetEventMaps)
+	public.Get("/event/recommendation", eventHandler.GetRecommendationEvent)
+	public.Get("/event/tahun-tersedia", eventHandler.GetTahunTersedia)
+	public.Get("/event/:slug", eventHandler.GetDetailEvent)
+
+	// =========================================================================
+	// ADMIN GROUP — web admin (write + read full fields)
+	// =========================================================================
+
+	admin := api.Group("/admin")
+
+	admin.Get("/destinasi/:id", destinasiHandler.GetDestinasiByID)
+	admin.Post("/destinasi", strictLimiter, destinasiHandler.CreateDestinasi)
+	admin.Put("/destinasi/:id", strictLimiter, destinasiHandler.UpdateDestinasi)
+	admin.Delete("/destinasi/:id", strictLimiter, destinasiHandler.DeleteDestinasi)
+
+	admin.Get("/hotel/:id", hotelHandler.GetHotelByID)
+	admin.Post("/hotel", strictLimiter, hotelHandler.CreateHotel)
+	admin.Put("/hotel/:id", strictLimiter, hotelHandler.UpdateHotel)
+	admin.Delete("/hotel/:id", strictLimiter, hotelHandler.DeleteHotel)
+
+	admin.Get("/event/:id", eventHandler.GetEventByID)
+	admin.Post("/event", strictLimiter, eventHandler.CreateEvent)
+	admin.Put("/event/:id", strictLimiter, eventHandler.UpdateEvent)
+	admin.Delete("/event/:id", strictLimiter, eventHandler.DeleteEvent)
 }

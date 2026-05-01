@@ -18,6 +18,7 @@ services:
   bapenda-db:
     image: postgres:18-alpine
     container_name: bapenda-db
+    command: postgres -c log_min_duration_statement=1000
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -48,7 +49,7 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - CLOUDINARY_URL=${CLOUDINARY_URL}
+      - GATEWAY_DATABASE_URL=${GATEWAY_DATABASE_URL}
     volumes:
       - .:/app
     depends_on:
@@ -63,5 +64,4 @@ services:
 volumes:
   bapenda-postgres-data:
   bapenda-redis-data:
-
 

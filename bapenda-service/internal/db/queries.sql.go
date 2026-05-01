@@ -40,22 +40,11 @@ INSERT INTO kendaraan_pajak (
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan,
     cetak_stnk, cetak_tnkb
 ) VALUES (
-    UPPER(REPLACE($1::text, ' ', '')),
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11,
-    $12,
-    $13,
-    $14,
-    $15,
-    $16
+    $1, $2, $3,
+    $4, $5, $6, $7,
+    $8, $9, $10, $11,
+    $12, $13, $14,
+    $15, $16
 ) RETURNING plat_nomor
 `
 
@@ -103,6 +92,7 @@ func (q *Queries) CreateKendaraanPajak(ctx context.Context, arg CreateKendaraanP
 }
 
 const createMasterNjkb = `-- name: CreateMasterNjkb :one
+
 INSERT INTO master_njkb (
     jenis_kendaraan, merk, model, tipe, tahun, nilai_jual
 ) VALUES ($1, $2, $3, $4, $5, $6)
@@ -118,6 +108,9 @@ type CreateMasterNjkbParams struct {
 	NilaiJual      int64  `json:"nilai_jual"`
 }
 
+// =============================================================================
+// ADMIN: MASTER NJKB
+// =============================================================================
 func (q *Queries) CreateMasterNjkb(ctx context.Context, arg CreateMasterNjkbParams) (int32, error) {
 	row := q.db.QueryRow(ctx, createMasterNjkb,
 		arg.JenisKendaraan,
@@ -151,9 +144,11 @@ func (q *Queries) DeleteMasterNjkb(ctx context.Context, id int32) error {
 }
 
 const getAllKendaraanPajakAdmin = `-- name: GetAllKendaraanPajakAdmin :many
-SELECT plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, tahun_buat, status_aktif, masa_pajak 
-FROM kendaraan_pajak 
-ORDER BY created_at DESC 
+SELECT 
+    plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, 
+    tahun_buat, status_aktif, masa_pajak
+FROM kendaraan_pajak
+ORDER BY created_at DESC
 LIMIT $2 OFFSET $1
 `
 
@@ -203,8 +198,9 @@ func (q *Queries) GetAllKendaraanPajakAdmin(ctx context.Context, arg GetAllKenda
 }
 
 const getAllMasterNjkbAdmin = `-- name: GetAllMasterNjkbAdmin :many
-SELECT id, jenis_kendaraan, merk, model, tipe, tahun, nilai_jual, created_at FROM master_njkb 
-ORDER BY merk, tahun DESC 
+SELECT id, jenis_kendaraan, merk, model, tipe, tahun, nilai_jual, created_at
+FROM master_njkb
+ORDER BY merk, tahun DESC
 LIMIT $2 OFFSET $1
 `
 
@@ -312,7 +308,9 @@ func (q *Queries) GetDistinctJenis(ctx context.Context) ([]string, error) {
 }
 
 const getDistinctMerk = `-- name: GetDistinctMerk :many
-SELECT DISTINCT merk FROM master_njkb WHERE jenis_kendaraan = $1 ORDER BY merk ASC
+SELECT DISTINCT merk FROM master_njkb 
+WHERE jenis_kendaraan = $1 
+ORDER BY merk ASC
 `
 
 func (q *Queries) GetDistinctMerk(ctx context.Context, jenisKendaraan string) ([]string, error) {
@@ -336,7 +334,9 @@ func (q *Queries) GetDistinctMerk(ctx context.Context, jenisKendaraan string) ([
 }
 
 const getDistinctModel = `-- name: GetDistinctModel :many
-SELECT DISTINCT model FROM master_njkb WHERE jenis_kendaraan = $1 AND merk = $2 ORDER BY model ASC
+SELECT DISTINCT model FROM master_njkb 
+WHERE jenis_kendaraan = $1 AND merk = $2 
+ORDER BY model ASC
 `
 
 type GetDistinctModelParams struct {
@@ -365,7 +365,9 @@ func (q *Queries) GetDistinctModel(ctx context.Context, arg GetDistinctModelPara
 }
 
 const getDistinctTahun = `-- name: GetDistinctTahun :many
-SELECT DISTINCT tahun FROM master_njkb WHERE jenis_kendaraan = $1 AND merk = $2 AND model = $3 AND tipe = $4 ORDER BY tahun DESC
+SELECT DISTINCT tahun FROM master_njkb 
+WHERE jenis_kendaraan = $1 AND merk = $2 AND model = $3 AND tipe = $4 
+ORDER BY tahun DESC
 `
 
 type GetDistinctTahunParams struct {
@@ -401,7 +403,9 @@ func (q *Queries) GetDistinctTahun(ctx context.Context, arg GetDistinctTahunPara
 }
 
 const getDistinctTipe = `-- name: GetDistinctTipe :many
-SELECT DISTINCT tipe FROM master_njkb WHERE jenis_kendaraan = $1 AND merk = $2 AND model = $3 ORDER BY tipe ASC
+SELECT DISTINCT tipe FROM master_njkb 
+WHERE jenis_kendaraan = $1 AND merk = $2 AND model = $3 
+ORDER BY tipe ASC
 `
 
 type GetDistinctTipeParams struct {
@@ -433,10 +437,11 @@ func (q *Queries) GetDistinctTipe(ctx context.Context, arg GetDistinctTipeParams
 const getKendaraanByPlatDanRangka = `-- name: GetKendaraanByPlatDanRangka :one
 SELECT
     plat_nomor_display, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak,
-    pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan, cetak_stnk, cetak_tnkb
+    pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan,
+    cetak_stnk, cetak_tnkb
 FROM kendaraan_pajak
-WHERE plat_nomor = UPPER(REPLACE($1::text, ' ', ''))
-AND RIGHT(nomor_rangka, 5) = UPPER($2::text)
+WHERE plat_nomor = $1
+  AND RIGHT(nomor_rangka, 5) = $2
 `
 
 type GetKendaraanByPlatDanRangkaParams struct {
@@ -486,13 +491,41 @@ func (q *Queries) GetKendaraanByPlatDanRangka(ctx context.Context, arg GetKendar
 }
 
 const getKendaraanPajakByPlatAdmin = `-- name: GetKendaraanPajakByPlatAdmin :one
-SELECT plat_nomor, plat_nomor_display, nomor_rangka, status_aktif, merk, tipe, warna, tahun_buat, model, masa_pajak, pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, cetak_stnk, cetak_tnkb, created_at, updated_at, total_pajak_tahunan FROM kendaraan_pajak 
-WHERE plat_nomor = UPPER(REPLACE($1::text, ' ', ''))
+SELECT 
+    plat_nomor, plat_nomor_display, nomor_rangka, status_aktif,
+    merk, tipe, warna, tahun_buat, model, masa_pajak,
+    pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan,
+    cetak_stnk, cetak_tnkb,
+    created_at, updated_at
+FROM kendaraan_pajak
+WHERE plat_nomor = $1
 `
 
-func (q *Queries) GetKendaraanPajakByPlatAdmin(ctx context.Context, platNomor string) (KendaraanPajak, error) {
+type GetKendaraanPajakByPlatAdminRow struct {
+	PlatNomor          string             `json:"plat_nomor"`
+	PlatNomorDisplay   string             `json:"plat_nomor_display"`
+	NomorRangka        string             `json:"nomor_rangka"`
+	StatusAktif        bool               `json:"status_aktif"`
+	Merk               string             `json:"merk"`
+	Tipe               string             `json:"tipe"`
+	Warna              string             `json:"warna"`
+	TahunBuat          int16              `json:"tahun_buat"`
+	Model              string             `json:"model"`
+	MasaPajak          pgtype.Date        `json:"masa_pajak"`
+	PkbPokok           int32              `json:"pkb_pokok"`
+	OpsenPkb           int32              `json:"opsen_pkb"`
+	Swdkllj            int32              `json:"swdkllj"`
+	ParkirBerlangganan int32              `json:"parkir_berlangganan"`
+	TotalPajakTahunan  pgtype.Int4        `json:"total_pajak_tahunan"`
+	CetakStnk          int32              `json:"cetak_stnk"`
+	CetakTnkb          int32              `json:"cetak_tnkb"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetKendaraanPajakByPlatAdmin(ctx context.Context, platNomor string) (GetKendaraanPajakByPlatAdminRow, error) {
 	row := q.db.QueryRow(ctx, getKendaraanPajakByPlatAdmin, platNomor)
-	var i KendaraanPajak
+	var i GetKendaraanPajakByPlatAdminRow
 	err := row.Scan(
 		&i.PlatNomor,
 		&i.PlatNomorDisplay,
@@ -508,18 +541,20 @@ func (q *Queries) GetKendaraanPajakByPlatAdmin(ctx context.Context, platNomor st
 		&i.OpsenPkb,
 		&i.Swdkllj,
 		&i.ParkirBerlangganan,
+		&i.TotalPajakTahunan,
 		&i.CetakStnk,
 		&i.CetakTnkb,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.TotalPajakTahunan,
 	)
 	return i, err
 }
 
 const getMasterNjkbById = `-- name: GetMasterNjkbById :one
-SELECT id, jenis_kendaraan, merk, model, tipe, tahun, nilai_jual, created_at FROM master_njkb 
-WHERE id = $1 LIMIT 1
+SELECT id, jenis_kendaraan, merk, model, tipe, tahun, nilai_jual, created_at
+FROM master_njkb
+WHERE id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetMasterNjkbById(ctx context.Context, id int32) (MasterNjkb, error) {
@@ -538,14 +573,56 @@ func (q *Queries) GetMasterNjkbById(ctx context.Context, id int32) (MasterNjkb, 
 	return i, err
 }
 
+const getMasterNjkbTree = `-- name: GetMasterNjkbTree :many
+SELECT jenis_kendaraan, merk, model, tipe, tahun, nilai_jual
+FROM master_njkb
+ORDER BY jenis_kendaraan, merk, model, tipe, tahun DESC
+`
+
+type GetMasterNjkbTreeRow struct {
+	JenisKendaraan string `json:"jenis_kendaraan"`
+	Merk           string `json:"merk"`
+	Model          string `json:"model"`
+	Tipe           string `json:"tipe"`
+	Tahun          int16  `json:"tahun"`
+	NilaiJual      int64  `json:"nilai_jual"`
+}
+
+func (q *Queries) GetMasterNjkbTree(ctx context.Context) ([]GetMasterNjkbTreeRow, error) {
+	rows, err := q.db.Query(ctx, getMasterNjkbTree)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMasterNjkbTreeRow
+	for rows.Next() {
+		var i GetMasterNjkbTreeRow
+		if err := rows.Scan(
+			&i.JenisKendaraan,
+			&i.Merk,
+			&i.Model,
+			&i.Tipe,
+			&i.Tahun,
+			&i.NilaiJual,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNilaiJual = `-- name: GetNilaiJual :one
 SELECT id, nilai_jual
 FROM master_njkb
-WHERE jenis_kendaraan = $1 
-  AND merk = $2 
-  AND model = $3 
-  AND tipe = $4 
-  AND tahun = $5
+WHERE jenis_kendaraan = $1
+  AND merk            = $2
+  AND model           = $3
+  AND tipe            = $4
+  AND tahun           = $5
 LIMIT 1
 `
 
@@ -590,9 +667,8 @@ UPDATE kendaraan_pajak SET
     swdkllj             = $11,
     parkir_berlangganan = $12,
     cetak_stnk          = $13,
-    cetak_tnkb          = $14,
-    updated_at          = CURRENT_TIMESTAMP
-WHERE plat_nomor = UPPER(REPLACE($15::text, ' ', ''))
+    cetak_tnkb          = $14
+WHERE plat_nomor = $15
 `
 
 type UpdateKendaraanPajakParams struct {

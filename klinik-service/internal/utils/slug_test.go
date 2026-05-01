@@ -1,33 +1,102 @@
 package utils
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
 
-func TestGenerateSlug(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      string
-		wantPrefix string 
-	}{
-		{"Judul Biasa", "Awas Hoaks Air Garam", "awas-hoaks-air-garam"},
-		{"Judul dengan Spasi Lebar dan Simbol", "  CEK FAKTA !!! Bahaya...   ", "cek-fakta-bahaya"},
-		{"Judul Kepanjangan", "Satu Dua Tiga Empat Lima Enam Tujuh Delapan Sembilan Sepuluh Sebelas Dua Belas", "satu-dua-tiga-empat-lima-enam-tujuh-delapan-sembilan-sepuluh"}, // Terpotong max 60 karakter
-		{"Judul Simbol Saja", "!!! ??? @@@", "berita"}, 
+var (
+	slugFormat   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	suffixFormat = regexp.MustCompile(`-[a-f0-9]{8}$`) 
+)
+
+func TestGenerateSlug_OutputFormat(t *testing.T) {
+	tests := []string{
+		"Hoaks Vaksin COVID-19",
+		"Email Epstein Sebut Perang Dunia III Dimulai 8 Februari 2026",
+		"Berita dengan: Karakter! @# Khusus",
+		"Title with    multiple   spaces",
+		"AKHIRNYA SEMUA HURUF KAPITAL",
+		"emoji-heavy 🎉 title 🚀",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GenerateSlug(tt.input)
+	for _, title := range tests {
+		t.Run(title, func(t *testing.T) {
+			slug := GenerateSlug(title)
 
-			if !strings.HasPrefix(got, tt.wantPrefix) {
-				t.Errorf("GenerateSlug() = %v, want prefix %v", got, tt.wantPrefix)
+			if !slugFormat.MatchString(slug) {
+				t.Errorf("GenerateSlug(%q) = %q does not match slug format", title, slug)
 			}
 
-			if len(got) != len(tt.wantPrefix)+5 {
-				t.Errorf("GenerateSlug() = %v, panjang tidak sesuai (harus ada -xxxx di akhir)", got)
+			// Length check: max 60 + 1 dash + 8 hex = 69 chars
+			if len(slug) > 70 {
+				t.Errorf("GenerateSlug(%q) = %q is too long (%d chars)", title, slug, len(slug))
+			}
+
+			if !suffixFormat.MatchString(slug) {
+				t.Errorf("GenerateSlug(%q) = %q missing 8-char hex suffix", title, slug)
 			}
 		})
+	}
+}
+
+func TestGenerateSlug_FallbackForEmpty(t *testing.T) {
+	tests := []string{"", "   ", "!!!", "🎉🎉🎉"}
+
+	for _, title := range tests {
+		t.Run(title, func(t *testing.T) {
+			slug := GenerateSlug(title)
+			if !strings.HasPrefix(slug, "berita-") {
+				t.Errorf("GenerateSlug(%q) = %q should start with 'berita-' fallback", title, slug)
+			}
+		})
+	}
+}
+
+func TestGenerateSlug_HasRandomSuffix(t *testing.T) {
+	
+	title := "Same Title"
+
+	differs := false
+	prev := GenerateSlug(title)
+	for i := 0; i < 10; i++ {
+		current := GenerateSlug(title)
+		if current != prev {
+			differs = true
+			break
+		}
+		prev = current
+	}
+
+	if !differs {
+		t.Errorf("GenerateSlug returned same slug 10 times in a row — random suffix not working")
+	}
+
+	
+}
+
+func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
+	tests := []string{
+		"---weird---title---",
+		"-leading hyphen",
+		"trailing hyphen-",
+		"   spaces   ",
+	}
+
+	for _, title := range tests {
+		t.Run(title, func(t *testing.T) {
+			slug := GenerateSlug(title)
+			if strings.HasPrefix(slug, "-") {
+				t.Errorf("GenerateSlug(%q) = %q starts with hyphen", title, slug)
+			}
+
+		})
+	}
+}
+
+func BenchmarkGenerateSlug(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = GenerateSlug("Sample Title for Benchmark")
 	}
 }

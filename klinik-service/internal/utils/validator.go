@@ -2,141 +2,198 @@ package utils
 
 import (
 	"fmt"
-	"html"
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
+
+// =============================================================================
+// VALIDATION ERROR
+// =============================================================================
 
 type ValidationError struct {
 	Field   string
 	Message string
 }
 
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
+// =============================================================================
+// PATTERNS
+// =============================================================================
+
 var (
 	safeQueryPattern    = regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
 	safeFilenamePattern = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
-	emailPattern        = regexp.MustCompile(`^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]+$`)
-	phonePattern        = regexp.MustCompile(`^(?:\+62|62|0)[2-9][0-9]{7,13}$`)
+	emailPattern        = regexp.MustCompile(`^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+	phonePattern        = regexp.MustCompile(`^(?:\+62|62|0)8[1-9][0-9]{7,11}$`)
+	uuidPattern         = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 )
+
+// =============================================================================
+// SEARCH/TEXT INPUT VALIDATION
+// =============================================================================
+
 
 func ValidateQueryString(input string, maxLength int, fieldName string) (string, *ValidationError) {
 	if input == "" {
 		return "", nil
 	}
 
-	input = strings.TrimSpace(input)
+	trimmed := strings.TrimSpace(input)
 
-	if utf8.RuneCountInString(input) > maxLength {
+	if utf8.RuneCountInString(trimmed) > maxLength {
 		return "", &ValidationError{
 			Field:   fieldName,
 			Message: fmt.Sprintf("Input terlalu panjang (maksimal %d karakter)", maxLength),
 		}
 	}
 
-	sanitized := safeQueryPattern.ReplaceAllString(input, "")
+	sanitized := safeQueryPattern.ReplaceAllString(trimmed, "")
+	sanitized = strings.TrimSpace(sanitized)
 
-	sanitized = html.EscapeString(sanitized)
-
-	if strings.TrimSpace(sanitized) == "" && input != "" {
+	if sanitized == "" && trimmed != "" {
 		return "", &ValidationError{
 			Field:   fieldName,
-			Message: "Input mengandung karakter berbahaya yang tidak diizinkan",
+			Message: "Input mengandung karakter yang tidak diizinkan",
 		}
 	}
-
-	return strings.TrimSpace(sanitized), nil
+	return sanitized, nil
 }
+
 
 func ValidateTextContent(input string, maxLength int, fieldName string) (string, *ValidationError) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return "", &ValidationError{Field: fieldName, Message: fieldName + " tidak boleh kosong"}
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: fieldName + " tidak boleh kosong",
+		}
 	}
-	if utf8.RuneCountInString(input) > maxLength {
-		return "", &ValidationError{Field: fieldName, Message: fmt.Sprintf("%s melebihi batas %d karakter", fieldName, maxLength)}
+	if utf8.RuneCountInString(trimmed) > maxLength {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: fmt.Sprintf("%s melebihi batas %d karakter", fieldName, maxLength),
+		}
 	}
-	
-	return html.EscapeString(input), nil
+	return trimmed, nil
 }
+
+// =============================================================================
+// SPECIFIC FORMAT VALIDATORS
+// =============================================================================
+
 
 func ValidateEmail(input string) (string, *ValidationError) {
-	input = strings.TrimSpace(input)
-	if !emailPattern.MatchString(input) {
+	trimmed := strings.TrimSpace(strings.ToLower(input))
+	if trimmed == "" {
+		return "", &ValidationError{Field: "email", Message: "Email tidak boleh kosong"}
+	}
+	if !emailPattern.MatchString(trimmed) {
 		return "", &ValidationError{Field: "email", Message: "Format email tidak valid"}
 	}
-	return input, nil
+	return trimmed, nil
 }
 
+
 func ValidatePhone(input string) (string, *ValidationError) {
-	input = strings.TrimSpace(input)
-	if !phonePattern.MatchString(input) {
-		return "", &ValidationError{Field: "no_hp", Message: "Format nomor HP tidak valid (gunakan awalan 08 / +62 / 62)"}
+	trimmed := strings.TrimSpace(strings.ReplaceAll(input, " ", ""))
+	if trimmed == "" {
+		return "", &ValidationError{
+			Field:   "no_hp",
+			Message: "Nomor HP tidak boleh kosong",
+		}
 	}
-	return input, nil
+	if !phonePattern.MatchString(trimmed) {
+		return "", &ValidationError{
+			Field:   "no_hp",
+			Message: "Format nomor HP tidak valid (gunakan awalan 08, +62, atau 62)",
+		}
+	}
+	return trimmed, nil
 }
 
 func ValidateURL(input, fieldName string) (string, *ValidationError) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return "", nil 
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", nil
 	}
-
-	parsedURL, err := url.ParseRequestURI(input)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", &ValidationError{
 			Field:   fieldName,
-			Message: "Format link tidak valid (harus menggunakan http:// atau https://)",
+			Message: "Format link tidak valid (harus http:// atau https://)",
 		}
 	}
-	return input, nil
+	return trimmed, nil
 }
+
+func ValidateUUID(input, fieldName string) (string, *ValidationError) {
+	trimmed := strings.TrimSpace(input)
+	if !uuidPattern.MatchString(trimmed) {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: fieldName + " harus berupa UUID valid",
+		}
+	}
+	return trimmed, nil
+}
+
+// =============================================================================
+// FILENAME — buat upload (image klarifikasi/proof)
+// =============================================================================
+
 
 func ValidateImageFilename(original string) string {
 	filename := strings.TrimSpace(original)
-
-	filename = filepath.Clean(filename)
-	filename = filepath.Base(filename) 
-
+	filename = filepath.Base(filename)
 	filename = safeFilenamePattern.ReplaceAllString(filename, "")
-
 	if filename == "" || filename == "." {
 		filename = "image_file"
 	}
-
 	return filename
 }
 
-func ValidatePaginationParams(pageStr, limitStr string) (page int, limit int) {
-	page = 1
-	limit = 10
+// =============================================================================
+// PAGINATION
+// =============================================================================
 
-	if p, ok := parseInt(pageStr); ok && p > 0 {
-		page = p
-	}
-	if l, ok := parseInt(limitStr); ok && l > 0 {
-		limit = l
+const (
+	DefaultPage  = 1
+	DefaultLimit = 10
+	MaxLimit     = 100
+)
+
+func ValidatePaginationParams(pageStr, limitStr string) (page, limit, offset int) {
+	page = parseIntDefault(pageStr, DefaultPage)
+	if page < 1 {
+		page = DefaultPage
 	}
 
-	if limit > 50 {
-		limit = 50
+	limit = parseIntDefault(limitStr, DefaultLimit)
+	if limit < 1 {
+		limit = DefaultLimit
+	}
+	if limit > MaxLimit {
+		limit = MaxLimit
 	}
 
-	return page, limit
+	offset = (page - 1) * limit
+	return
 }
 
-func parseInt(s string) (int, bool) {
-	if s == "" || len(s) > 3 {
-		return 0, false
+func parseIntDefault(s string, fallback int) int {
+	if s == "" || len(s) > 6 {
+		return fallback
 	}
-	var result int
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return 0, false
-		}
-		result = result*10 + int(ch-'0')
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fallback
 	}
-	return result, true
+	return n
 }
