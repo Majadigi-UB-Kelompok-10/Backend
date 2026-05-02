@@ -1,8 +1,12 @@
 package utils
 
 import (
+	"fmt"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -11,79 +15,158 @@ type ValidationError struct {
 	Message string
 }
 
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
+// =============================================================================
+// PATTERNS
+// =============================================================================
+
+var (
+	safeQueryPattern = regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
+	slugPattern      = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	datePattern      = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`) 
+)
+
+// =============================================================================
+// SEARCH / TEXT INPUT VALIDATION
+// =============================================================================
 
 func ValidateQueryString(input string, maxLength int, fieldName string) (string, *ValidationError) {
 	if input == "" {
-		return "", nil 
+		return "", nil
 	}
 
-	input = strings.TrimSpace(input)
+	trimmed := strings.TrimSpace(input)
 
-	if utf8.RuneCountInString(input) > maxLength {
+	if utf8.RuneCountInString(trimmed) > maxLength {
 		return "", &ValidationError{
 			Field:   fieldName,
-			Message: "Input terlalu panjang (max: " + string(rune(maxLength)) + " karakter)",
+			Message: fmt.Sprintf("Input terlalu panjang (maksimal %d karakter)", maxLength),
 		}
 	}
 
-	dangerousPattern := regexp.MustCompile(`[^a-zA-Z0-9 \-_./]`)
-	sanitized := dangerousPattern.ReplaceAllString(input, "")
+	sanitized := safeQueryPattern.ReplaceAllString(trimmed, "")
+	sanitized = strings.TrimSpace(sanitized)
 
-	if strings.TrimSpace(sanitized) == "" && input != "" {
+	if sanitized == "" && trimmed != "" {
 		return "", &ValidationError{
 			Field:   fieldName,
 			Message: "Input mengandung karakter yang tidak diizinkan",
 		}
 	}
-
-	return strings.TrimSpace(sanitized), nil
+	return sanitized, nil
 }
 
-func ValidatePaginationParams(pageStr, limitStr string) (page int, limit int) {
-	page = 1
-	limit = 10
-
-	if p, ok := parseInt(pageStr); ok && p > 0 {
-		page = p
-	}
-	if l, ok := parseInt(limitStr); ok && l > 0 {
-		limit = l
-	}
-
-	if limit > 50 {
-		limit = 50
-	}
-
-	return page, limit
-}
-
-func parseInt(s string) (int, bool) {
-	if s == "" || len(s) > 3 {
-		return 0, false
-	}
-	var result int
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return 0, false
+func ValidateTextContent(input string, maxLength int, fieldName string) (string, *ValidationError) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: fieldName + " tidak boleh kosong",
 		}
-		result = result*10 + int(ch-'0')
 	}
-	return result, true
+	if utf8.RuneCountInString(trimmed) > maxLength {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: fmt.Sprintf("%s melebihi batas %d karakter", fieldName, maxLength),
+		}
+	}
+	return trimmed, nil
 }
 
+// =============================================================================
+// SPECIFIC FORMAT VALIDATORS (Slug, URL, Date)
+// =============================================================================
 
-func ValidateImageFilename(original string) string {
-	filename := strings.TrimSpace(original)
-	filename = strings.ReplaceAll(filename, "/", "")
-	filename = strings.ReplaceAll(filename, "\\", "")
-	filename = strings.ReplaceAll(filename, "..", "")
+func ValidateSlug(input, fieldName string) (string, *ValidationError) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", &ValidationError{Field: fieldName, Message: fieldName + " tidak boleh kosong"}
+	}
+	if !slugPattern.MatchString(trimmed) {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: "Format slug tidak valid (hanya huruf kecil, angka, dan strip)",
+		}
+	}
+	return trimmed, nil
+}
 
-	safePattern := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
-	filename = safePattern.ReplaceAllString(filename, "")
+func ValidateURL(input, fieldName string) (string, *ValidationError) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", nil
+	}
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: "Format link tidak valid (harus diawali http:// atau https://)",
+		}
+	}
+	return trimmed, nil
+}
 
-	if filename == "" {
-		filename = "image"
+func ValidateDate(input, fieldName string) (string, *ValidationError) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", &ValidationError{Field: fieldName, Message: fieldName + " tidak boleh kosong"}
+	}
+	if !datePattern.MatchString(trimmed) {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: "Format tanggal tidak valid (gunakan format YYYY-MM-DD)",
+		}
+	}
+	
+	_, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return "", &ValidationError{
+			Field:   fieldName,
+			Message: "Tanggal tidak valid atau tidak ada di kalender",
+		}
+	}
+	
+	return trimmed, nil
+}
+
+// =============================================================================
+// PAGINATION (Standar Enterprise yang sinkron dengan DB Queries)
+// =============================================================================
+
+const (
+	DefaultPage  = 1
+	DefaultLimit = 10
+	MaxLimit     = 100
+)
+
+func ValidatePaginationParams(pageStr, limitStr string) (page, limit, offset int) {
+	page = parseIntDefault(pageStr, DefaultPage)
+	if page < 1 {
+		page = DefaultPage
 	}
 
-	return filename
+	limit = parseIntDefault(limitStr, DefaultLimit)
+	if limit < 1 {
+		limit = DefaultLimit
+	}
+	if limit > MaxLimit {
+		limit = MaxLimit
+	}
+
+	offset = (page - 1) * limit
+	return
+}
+
+func parseIntDefault(s string, fallback int) int {
+	if s == "" || len(s) > 6 {
+		return fallback
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fallback
+	}
+	return n
 }

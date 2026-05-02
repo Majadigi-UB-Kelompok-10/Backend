@@ -14,18 +14,24 @@ type BahanPokok struct {
 	Slug      string
 	Satuan    string
 	GambarUrl pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type HargaHarian struct {
-	ID           int32
+	ID           int64
 	BahanPokokID int32
 	AreaID       int32
 	Harga        int32
 	Tanggal      pgtype.Date
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type MasterArea struct {
-	ID   int32
-	Nama string
-	Slug string
+	ID        int32
+	Nama      string
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
