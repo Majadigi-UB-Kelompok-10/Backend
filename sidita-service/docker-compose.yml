@@ -49,6 +49,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - CLOUDINARY_URL=${CLOUDINARY_URL}
+      - GATEWAY_DATABASE_URL=${GATEWAY_DATABASE_URL}
     volumes:
       - .:/app
     depends_on:
@@ -63,5 +64,4 @@ services:
 volumes:
   sidita-postgres-data:
   sidita-redis-data:
-
 
