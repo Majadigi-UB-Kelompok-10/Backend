@@ -11,10 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countBahanPokok = `-- name: CountBahanPokok :one
+SELECT COUNT(id) 
+FROM bahan_pokok
+WHERE ($1::text IS NULL OR nama ILIKE '%' || $1::text || '%')
+`
+
+func (q *Queries) CountBahanPokok(ctx context.Context, keyword pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countBahanPokok, keyword)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createBahanPokok = `-- name: CreateBahanPokok :one
 INSERT INTO bahan_pokok (nama, slug, satuan, gambar_url)
 VALUES ($1, $2, $3, $4)
-RETURNING id, nama, slug, satuan, gambar_url
+RETURNING id, nama, slug
 `
 
 type CreateBahanPokokParams struct {
@@ -24,54 +37,21 @@ type CreateBahanPokokParams struct {
 	GambarUrl pgtype.Text
 }
 
-func (q *Queries) CreateBahanPokok(ctx context.Context, arg CreateBahanPokokParams) (BahanPokok, error) {
+type CreateBahanPokokRow struct {
+	ID   int32
+	Nama string
+	Slug string
+}
+
+func (q *Queries) CreateBahanPokok(ctx context.Context, arg CreateBahanPokokParams) (CreateBahanPokokRow, error) {
 	row := q.db.QueryRow(ctx, createBahanPokok,
 		arg.Nama,
 		arg.Slug,
 		arg.Satuan,
 		arg.GambarUrl,
 	)
-	var i BahanPokok
-	err := row.Scan(
-		&i.ID,
-		&i.Nama,
-		&i.Slug,
-		&i.Satuan,
-		&i.GambarUrl,
-	)
-	return i, err
-}
-
-const createHargaHarian = `-- name: CreateHargaHarian :one
-INSERT INTO harga_harian (bahan_pokok_id, area_id, harga, tanggal)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (bahan_pokok_id, area_id, tanggal) 
-DO UPDATE SET harga = EXCLUDED.harga
-RETURNING id, bahan_pokok_id, area_id, harga, tanggal
-`
-
-type CreateHargaHarianParams struct {
-	BahanPokokID int32
-	AreaID       int32
-	Harga        int32
-	Tanggal      pgtype.Date
-}
-
-func (q *Queries) CreateHargaHarian(ctx context.Context, arg CreateHargaHarianParams) (HargaHarian, error) {
-	row := q.db.QueryRow(ctx, createHargaHarian,
-		arg.BahanPokokID,
-		arg.AreaID,
-		arg.Harga,
-		arg.Tanggal,
-	)
-	var i HargaHarian
-	err := row.Scan(
-		&i.ID,
-		&i.BahanPokokID,
-		&i.AreaID,
-		&i.Harga,
-		&i.Tanggal,
-	)
+	var i CreateBahanPokokRow
+	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
 	return i, err
 }
 
@@ -88,13 +68,15 @@ const deleteHargaHarian = `-- name: DeleteHargaHarian :exec
 DELETE FROM harga_harian WHERE id = $1
 `
 
-func (q *Queries) DeleteHargaHarian(ctx context.Context, id int32) error {
+func (q *Queries) DeleteHargaHarian(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteHargaHarian, id)
 	return err
 }
 
 const getAllArea = `-- name: GetAllArea :many
-SELECT id, nama, slug FROM master_area ORDER BY nama ASC
+SELECT id, nama, slug, created_at, updated_at 
+FROM master_area 
+ORDER BY nama ASC
 `
 
 func (q *Queries) GetAllArea(ctx context.Context) ([]MasterArea, error) {
@@ -106,33 +88,13 @@ func (q *Queries) GetAllArea(ctx context.Context) ([]MasterArea, error) {
 	var items []MasterArea
 	for rows.Next() {
 		var i MasterArea
-		if err := rows.Scan(&i.ID, &i.Nama, &i.Slug); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getAllAreas = `-- name: GetAllAreas :many
-SELECT id, nama, slug 
-FROM master_area
-ORDER BY nama ASC
-`
-
-func (q *Queries) GetAllAreas(ctx context.Context) ([]MasterArea, error) {
-	rows, err := q.db.Query(ctx, getAllAreas)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []MasterArea
-	for rows.Next() {
-		var i MasterArea
-		if err := rows.Scan(&i.ID, &i.Nama, &i.Slug); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -144,21 +106,21 @@ func (q *Queries) GetAllAreas(ctx context.Context) ([]MasterArea, error) {
 }
 
 const getAllBahanPokok = `-- name: GetAllBahanPokok :many
-SELECT id, nama, slug, satuan, gambar_url 
+SELECT id, nama, slug, satuan, gambar_url, created_at, updated_at 
 FROM bahan_pokok 
-WHERE ($3::text = '' OR nama ILIKE '%' || $3 || '%')
-ORDER BY id ASC
-LIMIT $1 OFFSET $2
+WHERE ($1::text IS NULL OR nama ILIKE '%' || $1::text || '%')
+ORDER BY nama ASC
+LIMIT $3 OFFSET $2
 `
 
 type GetAllBahanPokokParams struct {
-	Limit  int32
-	Offset int32
-	Nama   string
+	Keyword    pgtype.Text
+	OffsetData int32
+	LimitData  int32
 }
 
 func (q *Queries) GetAllBahanPokok(ctx context.Context, arg GetAllBahanPokokParams) ([]BahanPokok, error) {
-	rows, err := q.db.Query(ctx, getAllBahanPokok, arg.Limit, arg.Offset, arg.Nama)
+	rows, err := q.db.Query(ctx, getAllBahanPokok, arg.Keyword, arg.OffsetData, arg.LimitData)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +134,8 @@ func (q *Queries) GetAllBahanPokok(ctx context.Context, arg GetAllBahanPokokPara
 			&i.Slug,
 			&i.Satuan,
 			&i.GambarUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -184,18 +148,28 @@ func (q *Queries) GetAllBahanPokok(ctx context.Context, arg GetAllBahanPokokPara
 }
 
 const getAreaBySlug = `-- name: GetAreaBySlug :one
-SELECT id, nama, slug FROM master_area WHERE slug = $1 LIMIT 1
+SELECT id, nama, slug, created_at, updated_at 
+FROM master_area 
+WHERE slug = $1 
+LIMIT 1
 `
 
 func (q *Queries) GetAreaBySlug(ctx context.Context, slug string) (MasterArea, error) {
 	row := q.db.QueryRow(ctx, getAreaBySlug, slug)
 	var i MasterArea
-	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
 const getAreaIDByName = `-- name: GetAreaIDByName :one
-SELECT id FROM master_area 
+SELECT id 
+FROM master_area 
 WHERE nama ILIKE '%' || $1::text || '%' 
 LIMIT 1
 `
@@ -210,12 +184,21 @@ func (q *Queries) GetAreaIDByName(ctx context.Context, nama string) (int32, erro
 const getBahanPokokByID = `-- name: GetBahanPokokByID :one
 SELECT id, nama, slug, satuan, gambar_url
 FROM bahan_pokok 
-WHERE id = $1 LIMIT 1
+WHERE id = $1 
+LIMIT 1
 `
 
-func (q *Queries) GetBahanPokokByID(ctx context.Context, id int32) (BahanPokok, error) {
+type GetBahanPokokByIDRow struct {
+	ID        int32
+	Nama      string
+	Slug      string
+	Satuan    string
+	GambarUrl pgtype.Text
+}
+
+func (q *Queries) GetBahanPokokByID(ctx context.Context, id int32) (GetBahanPokokByIDRow, error) {
 	row := q.db.QueryRow(ctx, getBahanPokokByID, id)
-	var i BahanPokok
+	var i GetBahanPokokByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Nama,
@@ -227,9 +210,10 @@ func (q *Queries) GetBahanPokokByID(ctx context.Context, id int32) (BahanPokok, 
 }
 
 const getBahanPokokBySlug = `-- name: GetBahanPokokBySlug :one
-SELECT id, nama, slug, satuan, gambar_url 
+SELECT id, nama, slug, satuan, gambar_url, created_at, updated_at 
 FROM bahan_pokok 
-WHERE slug = $1 LIMIT 1
+WHERE slug = $1 
+LIMIT 1
 `
 
 func (q *Queries) GetBahanPokokBySlug(ctx context.Context, slug string) (BahanPokok, error) {
@@ -241,12 +225,15 @@ func (q *Queries) GetBahanPokokBySlug(ctx context.Context, slug string) (BahanPo
 		&i.Slug,
 		&i.Satuan,
 		&i.GambarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getBahanPokokIDByName = `-- name: GetBahanPokokIDByName :one
-SELECT id FROM bahan_pokok 
+SELECT id 
+FROM bahan_pokok 
 WHERE nama ILIKE '%' || $1::text || '%' 
 LIMIT 1
 `
@@ -262,7 +249,8 @@ const getDaftarHargaArea = `-- name: GetDaftarHargaArea :many
 SELECT ma.nama AS area, ma.slug AS area_slug, h.harga
 FROM harga_harian h
 JOIN master_area ma ON h.area_id = ma.id
-WHERE h.bahan_pokok_id = $1 AND h.tanggal = $2
+WHERE h.bahan_pokok_id = $1 
+  AND h.tanggal = $2::date
 ORDER BY ma.nama ASC
 `
 
@@ -302,7 +290,7 @@ SELECT ma.nama AS area, ma.slug AS area_slug, ROUND(AVG(h.harga))::int AS rata_r
 FROM harga_harian h
 JOIN master_area ma ON h.area_id = ma.id
 WHERE h.bahan_pokok_id = $1 
-  AND h.tanggal <= $2 
+  AND h.tanggal <= $2::date 
   AND h.tanggal > ($2::date - INTERVAL '15 days')
 GROUP BY ma.id, ma.nama, ma.slug
 ORDER BY rata_rata_15_hari DESC
@@ -343,7 +331,7 @@ const getRiwayatHargaRataRata = `-- name: GetRiwayatHargaRataRata :many
 SELECT tanggal, ROUND(AVG(harga))::int AS rata_rata_harga
 FROM harga_harian
 WHERE bahan_pokok_id = $1 
-  AND tanggal <= $2
+  AND tanggal <= $2::date
   AND tanggal > ($2::date - INTERVAL '30 days')
 GROUP BY tanggal
 ORDER BY tanggal ASC
@@ -382,8 +370,10 @@ func (q *Queries) GetRiwayatHargaRataRata(ctx context.Context, arg GetRiwayatHar
 const getTanggalUpdateTerakhir = `-- name: GetTanggalUpdateTerakhir :one
 SELECT tanggal 
 FROM harga_harian 
-WHERE bahan_pokok_id = $1 AND tanggal <= $2 
-ORDER BY tanggal DESC LIMIT 1
+WHERE bahan_pokok_id = $1 
+  AND tanggal <= $2::date 
+ORDER BY tanggal DESC 
+LIMIT 1
 `
 
 type GetTanggalUpdateTerakhirParams struct {
@@ -399,13 +389,13 @@ func (q *Queries) GetTanggalUpdateTerakhir(ctx context.Context, arg GetTanggalUp
 }
 
 const getTotalBahanPokok = `-- name: GetTotalBahanPokok :one
-SELECT count(*) 
+SELECT COUNT(*) 
 FROM bahan_pokok
-WHERE ($1::text = '' OR nama ILIKE '%' || $1 || '%')
+WHERE $1::text IS NULL OR nama ILIKE '%' || $1::text || '%'
 `
 
-func (q *Queries) GetTotalBahanPokok(ctx context.Context, nama string) (int64, error) {
-	row := q.db.QueryRow(ctx, getTotalBahanPokok, nama)
+func (q *Queries) GetTotalBahanPokok(ctx context.Context, keyword string) (int64, error) {
+	row := q.db.QueryRow(ctx, getTotalBahanPokok, keyword)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -419,7 +409,7 @@ SELECT
 FROM harga_harian h_outer
 JOIN master_area ma ON h_outer.area_id = ma.id
 WHERE h_outer.tanggal <= $1::date
-  AND ($2::text = '' OR ma.slug = $2)
+  AND ($2::text IS NULL OR ma.slug = $2::text)
   AND (h_outer.bahan_pokok_id, h_outer.tanggal) IN (
     SELECT ranked.bahan_pokok_id, ranked.tanggal
     FROM (
@@ -433,7 +423,7 @@ WHERE h_outer.tanggal <= $1::date
         FROM harga_harian h_inner
         JOIN master_area ma_inner ON h_inner.area_id = ma_inner.id
         WHERE h_inner.tanggal <= $1::date
-          AND ($2::text = '' OR ma_inner.slug = $2)
+          AND ($2::text IS NULL OR ma_inner.slug = $2::text)
     ) ranked
     WHERE ranked.urutan <= 2  
 )
@@ -443,7 +433,7 @@ ORDER BY h_outer.bahan_pokok_id ASC, h_outer.tanggal ASC
 
 type GetTrenSemuaBahanPokokParams struct {
 	Tanggal  pgtype.Date
-	AreaSlug string
+	AreaSlug pgtype.Text
 }
 
 type GetTrenSemuaBahanPokokRow struct {
@@ -474,36 +464,19 @@ func (q *Queries) GetTrenSemuaBahanPokok(ctx context.Context, arg GetTrenSemuaBa
 
 const getTrenSemuaBahanPokokByArea = `-- name: GetTrenSemuaBahanPokokByArea :many
 SELECT 
-    h_outer.bahan_pokok_id,
-    h_outer.tanggal,
-    h_outer.harga AS rata_rata_harga
-FROM harga_harian h_outer
-JOIN master_area ma ON h_outer.area_id = ma.id
-WHERE h_outer.tanggal <= $1::date
-  AND ma.slug = $2
-  AND (h_outer.bahan_pokok_id, h_outer.tanggal) IN (
-    SELECT ranked.bahan_pokok_id, ranked.tanggal
-    FROM (
-        SELECT 
-            h_inner.bahan_pokok_id, 
-            h_inner.tanggal,
-            DENSE_RANK() OVER (
-                PARTITION BY h_inner.bahan_pokok_id 
-                ORDER BY h_inner.tanggal DESC
-            ) AS urutan
-        FROM harga_harian h_inner
-        JOIN master_area ma_inner ON h_inner.area_id = ma_inner.id
-        WHERE h_inner.tanggal <= $1::date
-          AND ma_inner.slug = $2
-    ) ranked
-    WHERE ranked.urutan <= 2  
-)
-ORDER BY h_outer.bahan_pokok_id ASC, h_outer.tanggal ASC
+    bp.id AS bahan_pokok_id,
+    hh.tanggal,
+    hh.harga AS rata_rata_harga
+FROM bahan_pokok bp
+JOIN harga_harian hh ON bp.id = hh.bahan_pokok_id
+JOIN master_area ma ON hh.area_id = ma.id
+WHERE hh.tanggal = $1 AND ma.slug = $2
+ORDER BY bp.id
 `
 
 type GetTrenSemuaBahanPokokByAreaParams struct {
-	Tanggal  pgtype.Date
-	AreaSlug string
+	Tanggal pgtype.Date
+	Slug    string
 }
 
 type GetTrenSemuaBahanPokokByAreaRow struct {
@@ -513,7 +486,7 @@ type GetTrenSemuaBahanPokokByAreaRow struct {
 }
 
 func (q *Queries) GetTrenSemuaBahanPokokByArea(ctx context.Context, arg GetTrenSemuaBahanPokokByAreaParams) ([]GetTrenSemuaBahanPokokByAreaRow, error) {
-	rows, err := q.db.Query(ctx, getTrenSemuaBahanPokokByArea, arg.Tanggal, arg.AreaSlug)
+	rows, err := q.db.Query(ctx, getTrenSemuaBahanPokokByArea, arg.Tanggal, arg.Slug)
 	if err != nil {
 		return nil, err
 	}
@@ -534,54 +507,72 @@ func (q *Queries) GetTrenSemuaBahanPokokByArea(ctx context.Context, arg GetTrenS
 
 const updateBahanPokok = `-- name: UpdateBahanPokok :one
 UPDATE bahan_pokok
-SET nama = $2,
-    slug = $3,
-    satuan = $4,
-    gambar_url = $5
-WHERE id = $1
-RETURNING id, nama, slug, satuan, gambar_url
+SET nama       = $1,
+    slug       = $2,
+    satuan     = $3,
+    gambar_url = $4
+WHERE id = $5
+RETURNING id, nama, slug
 `
 
 type UpdateBahanPokokParams struct {
-	ID        int32
 	Nama      string
 	Slug      string
 	Satuan    string
 	GambarUrl pgtype.Text
+	ID        int32
 }
 
-func (q *Queries) UpdateBahanPokok(ctx context.Context, arg UpdateBahanPokokParams) (BahanPokok, error) {
+type UpdateBahanPokokRow struct {
+	ID   int32
+	Nama string
+	Slug string
+}
+
+func (q *Queries) UpdateBahanPokok(ctx context.Context, arg UpdateBahanPokokParams) (UpdateBahanPokokRow, error) {
 	row := q.db.QueryRow(ctx, updateBahanPokok,
-		arg.ID,
 		arg.Nama,
 		arg.Slug,
 		arg.Satuan,
 		arg.GambarUrl,
+		arg.ID,
 	)
-	var i BahanPokok
-	err := row.Scan(
-		&i.ID,
-		&i.Nama,
-		&i.Slug,
-		&i.Satuan,
-		&i.GambarUrl,
-	)
+	var i UpdateBahanPokokRow
+	err := row.Scan(&i.ID, &i.Nama, &i.Slug)
 	return i, err
 }
 
-const updateHargaHarian = `-- name: UpdateHargaHarian :one
-UPDATE harga_harian SET harga = $2 WHERE id = $1
+const upsertHargaHarian = `-- name: UpsertHargaHarian :one
+INSERT INTO harga_harian (bahan_pokok_id, area_id, harga, tanggal)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (bahan_pokok_id, area_id, tanggal) 
+DO UPDATE SET harga = EXCLUDED.harga
 RETURNING id, bahan_pokok_id, area_id, harga, tanggal
 `
 
-type UpdateHargaHarianParams struct {
-	ID    int32
-	Harga int32
+type UpsertHargaHarianParams struct {
+	BahanPokokID int32
+	AreaID       int32
+	Harga        int32
+	Tanggal      pgtype.Date
 }
 
-func (q *Queries) UpdateHargaHarian(ctx context.Context, arg UpdateHargaHarianParams) (HargaHarian, error) {
-	row := q.db.QueryRow(ctx, updateHargaHarian, arg.ID, arg.Harga)
-	var i HargaHarian
+type UpsertHargaHarianRow struct {
+	ID           int64
+	BahanPokokID int32
+	AreaID       int32
+	Harga        int32
+	Tanggal      pgtype.Date
+}
+
+func (q *Queries) UpsertHargaHarian(ctx context.Context, arg UpsertHargaHarianParams) (UpsertHargaHarianRow, error) {
+	row := q.db.QueryRow(ctx, upsertHargaHarian,
+		arg.BahanPokokID,
+		arg.AreaID,
+		arg.Harga,
+		arg.Tanggal,
+	)
+	var i UpsertHargaHarianRow
 	err := row.Scan(
 		&i.ID,
 		&i.BahanPokokID,
