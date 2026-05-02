@@ -8,32 +8,53 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 )
 
-func SetupRoutes(app *fiber.App, bpHandler *handlers.BahanPokokHandler) {
+func SetupRoutes(app *fiber.App, handler *handlers.SiskaperbapoHandler) {
 	api := app.Group("/api/v1")
 
-	postLimiter := limiter.New(limiter.Config{
-		Max:        10,
+
+
+	searchLimiter := limiter.New(limiter.Config{
+		Max:        50,
 		Expiration: 1 * time.Minute,
-		LimitReached: func(c fiber.Ctx) error {
-			return c.Status(429).JSON(fiber.Map{
-				"error": "Terlalu banyak request simpan data, tunggu sebentar.",
-			})
-		},
+		LimitReached: rateLimitResponse("Terlalu banyak request pencarian. Silakan tunggu 1 menit."),
+	})
+
+	actionLimiter := limiter.New(limiter.Config{
+		Max:        30,
+		Expiration: 1 * time.Minute,
+		LimitReached: rateLimitResponse("Terlalu banyak request simpan data. Silakan tunggu 1 menit."),
 	})
 
 	api.Get("/", func(c fiber.Ctx) error {
-		return c.SendString("API Siskaperbapo Menyala Bossku!")
+		return c.JSON(handlers.SuccessResponse{
+			Pesan: "API Siskaperbapo v1 Active",
+		})
 	})
 
-	api.Get("/bahan-pokok", bpHandler.GetAllBahanPokok)
-	api.Get("/bahan-pokok/:slug", bpHandler.GetDetailBahanPokok)
-	api.Get("/areas", bpHandler.GetAllAreas)
-	api.Post("/bahan-pokok", postLimiter, bpHandler.CreateBahanPokok)
-	api.Post("/harga-harian", postLimiter, bpHandler.CreateHargaHarian)
-	api.Put("/harga-harian/:id", postLimiter, bpHandler.UpdateHargaHarian)
-	api.Delete("/harga-harian/:id", postLimiter, bpHandler.DeleteHargaHarian)
-	api.Put("/bahan-pokok/:id", postLimiter, bpHandler.UpdateBahanPokok)
-	api.Delete("/bahan-pokok/:id", postLimiter, bpHandler.DeleteBahanPokok)
+	public := api.Group("/public")
 
-	api.Get("/siskaperbapo-page", bpHandler.GetSduiMainData)
+	public.Get("/areas", searchLimiter, handler.GetAllAreas)
+	public.Get("/bahan-pokok", searchLimiter, handler.GetAllBahanPokok)
+	public.Get("/bahan-pokok/:slug", searchLimiter, handler.GetDetailBahanPokok)
+	
+	public.Get("/sdui-page", searchLimiter, handler.GetSduiMainData)
+
+
+	admin := api.Group("/admin")
+
+	admin.Post("/bahan-pokok", actionLimiter, handler.CreateBahanPokok)
+	admin.Put("/bahan-pokok/:id", actionLimiter, handler.UpdateBahanPokok)
+	admin.Delete("/bahan-pokok/:id", actionLimiter, handler.DeleteBahanPokok)
+
+	admin.Post("/harga-harian", actionLimiter, handler.CreateHargaHarian)
+}
+
+func rateLimitResponse(message string) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+			Code:    "ERR_RATE_LIMIT",
+			Message: message,
+			Action:  "Sistem mendeteksi lonjakan trafik. Silakan tunggu sebentar sebelum mencoba lagi.",
+		})
+	}
 }
