@@ -54,8 +54,6 @@ SELECT jenis_kendaraan, merk, model, tipe, tahun, nilai_jual
 FROM master_njkb
 ORDER BY jenis_kendaraan, merk, model, tipe, tahun DESC;
 
-
-
 -- name: CreateKendaraanPajak :one
 INSERT INTO kendaraan_pajak (
     plat_nomor, plat_nomor_display, nomor_rangka, status_aktif,
@@ -68,10 +66,12 @@ INSERT INTO kendaraan_pajak (
     sqlc.arg('tahun_buat'), sqlc.arg('model'), sqlc.arg('masa_pajak'), sqlc.arg('pkb_pokok'),
     sqlc.arg('opsen_pkb'), sqlc.arg('swdkllj'), sqlc.arg('parkir_berlangganan'),
     sqlc.arg('cetak_stnk'), sqlc.arg('cetak_tnkb')
-) RETURNING plat_nomor;
+) RETURNING id; -- RETURNING sekarang membalikkan UUID, bukan plat nomor lagi!
 
 -- name: UpdateKendaraanPajak :exec
 UPDATE kendaraan_pajak SET
+    plat_nomor          = sqlc.arg('plat_nomor'),
+    plat_nomor_display  = sqlc.arg('plat_nomor_display'), 
     nomor_rangka        = sqlc.arg('nomor_rangka'),
     status_aktif        = sqlc.arg('status_aktif'),
     merk                = sqlc.arg('merk'),
@@ -86,23 +86,25 @@ UPDATE kendaraan_pajak SET
     parkir_berlangganan = sqlc.arg('parkir_berlangganan'),
     cetak_stnk          = sqlc.arg('cetak_stnk'),
     cetak_tnkb          = sqlc.arg('cetak_tnkb')
-WHERE plat_nomor = sqlc.arg('plat_nomor_key');
+WHERE id = sqlc.arg('id'); -- WHERE-nya sekarang pakai ID
 
 -- name: DeleteKendaraanPajak :exec
-DELETE FROM kendaraan_pajak WHERE plat_nomor = $1;
+DELETE FROM kendaraan_pajak WHERE id = $1; -- Hapus pakai ID
 
--- name: GetKendaraanPajakByPlatAdmin :one
+-- name: GetKendaraanPajakByIdAdmin :one
 SELECT 
+    id, -- ID WAJIB DI-SELECT BIAR MUNCUL DI JSON
     plat_nomor, plat_nomor_display, nomor_rangka, status_aktif,
     merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan,
     cetak_stnk, cetak_tnkb,
     created_at, updated_at
 FROM kendaraan_pajak
-WHERE plat_nomor = sqlc.arg('plat_nomor');
+WHERE id = $1; -- Cari spesifik pakai ID
 
 -- name: GetAllKendaraanPajakAdmin :many
 SELECT 
+    id, -- ID WAJIB DI-SELECT BIAR MUNCUL DI JSON
     plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, 
     tahun_buat, status_aktif, masa_pajak
 FROM kendaraan_pajak
@@ -111,7 +113,6 @@ LIMIT sqlc.arg('limit_data') OFFSET sqlc.arg('offset_data');
 
 -- name: CountKendaraanPajak :one
 SELECT COUNT(*) FROM kendaraan_pajak;
-
 
 -- =============================================================================
 -- ADMIN: MASTER NJKB
