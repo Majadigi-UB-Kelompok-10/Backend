@@ -14,6 +14,7 @@ import (
 	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,16 +28,14 @@ func NewEventHandler(q *db.Queries, cld *cloudinary.Cloudinary) *EventHandler {
 	return &EventHandler{Queries: q, Cld: cld}
 }
 
-func invalidateEventCache(slugs ...string) {
-	cache.GlobalCache.DeleteByPrefix("event:list:")
-	cache.GlobalCache.DeleteByPrefix("event:maps:")
-	cache.GlobalCache.Delete("event:recommendation")
-	cache.GlobalCache.Delete("event:tahun-tersedia")
-	for _, s := range slugs {
-		if s != "" {
-			cache.GlobalCache.Delete("event:detail:" + s)
-		}
-	}
+func invalidateEventCache(id int32) {
+    cache.GlobalCache.DeleteByPrefix("event:list:")
+    cache.GlobalCache.DeleteByPrefix("event:maps:")
+    cache.GlobalCache.Delete("event:recommendation")
+    cache.GlobalCache.Delete("event:tahun-tersedia")
+    if id > 0 {
+        cache.GlobalCache.Delete(fmt.Sprintf("event:detail:%d", id))
+    }
 }
 
 func parseBulan(s string) int {
@@ -80,104 +79,106 @@ func parseBulan(s string) int {
 // =============================================================================
 
 func (h *EventHandler) ListEvent(c fiber.Ctx) error {
-	page, limit, offset := parsePagination(c)
+    page, limit, offset := parsePagination(c)
 
-	keyword, errKw := utils.ValidateQueryString(c.Query("search"), 100, "search")
-	if errKw != nil {
-		return validationErrorResponse(c, errKw)
-	}
-	areaName, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
-	if errArea != nil {
-		return validationErrorResponse(c, errArea)
-	}
+    keyword, errKw := utils.ValidateQueryString(c.Query("search"), 100, "search")
+    if errKw != nil {
+        return validationErrorResponse(c, errKw)
+    }
+    areaName, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
+    if errArea != nil {
+        return validationErrorResponse(c, errArea)
+    }
 
-	tahunStr := strings.TrimSpace(c.Query("tahun"))
-	bulanStr := strings.TrimSpace(c.Query("bulan"))
+    tahunStr := strings.TrimSpace(c.Query("tahun"))
+    bulanStr := strings.TrimSpace(c.Query("bulan"))
 
-	cacheKey := fmt.Sprintf("event:list:area_%s:tahun_%s:bulan_%s:keyword_%s:page_%d:limit_%d",
-		normalizeKey(areaName), tahunStr, bulanStr, normalizeKey(keyword), page, limit)
-	if respondCached(c, cacheKey) {
-		return nil
-	}
+    cacheKey := fmt.Sprintf("event:list:area_%s:tahun_%s:bulan_%s:keyword_%s:page_%d:limit_%d",
+        normalizeKey(areaName), tahunStr, bulanStr, normalizeKey(keyword), page, limit)
+    if respondCached(c, cacheKey) {
+        return nil
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+    defer cancel()
 
-	var areaIDArg pgtype.Int4
-	if areaName != "" {
-		area, err := h.Queries.GetAreaByName(ctx, areaName)
-		if err == nil {
-			areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
-		} else {
-			areaIDArg = pgtype.Int4{Int32: -1, Valid: true}
-		}
-	}
+    areaIDArg := pgtype.Int4{Valid: false}
+    tahunArg := pgtype.Int4{Valid: false}
+    bulanArg := pgtype.Int4{Valid: false}
+    keywordArg := pgtype.Text{Valid: false}
 
-	var tahunArg pgtype.Int4
-	if tahunStr != "" {
-		if t, err := strconv.Atoi(tahunStr); err == nil && t >= 2000 && t <= 2100 {
-			tahunArg = pgtype.Int4{Int32: int32(t), Valid: true}
-		}
-	}
+    if areaName != "" {
+        area, err := h.Queries.GetAreaByName(ctx, areaName) 
+        if err == nil {
+            areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
+        }
+    }
 
-	var bulanArg pgtype.Int4
-	if b := parseBulan(bulanStr); b > 0 {
-		bulanArg = pgtype.Int4{Int32: int32(b), Valid: true}
-	}
+    if tahunStr != "" {
+        if t, err := strconv.Atoi(tahunStr); err == nil && t >= 2000 && t <= 2100 {
+            tahunArg = pgtype.Int4{Int32: int32(t), Valid: true}
+        }
+    }
 
-	var keywordArg pgtype.Text
-	if keyword != "" {
-		keywordArg = pgtype.Text{String: keyword, Valid: true}
-	}
+    if b := parseBulan(bulanStr); b > 0 {
+        bulanArg = pgtype.Int4{Int32: int32(b), Valid: true}
+    }
 
-	listArg := db.ListEventParams{
-		AreaID:     areaIDArg,
-		Tahun:      tahunArg,
-		Bulan:      bulanArg,
-		Keyword:    keywordArg,
-		LimitData:  int32(limit),
-		OffsetData: int32(offset),
-	}
-	countArg := db.CountEventParams{
-		AreaID:  areaIDArg,
-		Tahun:   tahunArg,
-		Bulan:   bulanArg,
-		Keyword: keywordArg,
-	}
+    if keyword != "" {
+        keywordArg = pgtype.Text{String: keyword, Valid: true}
+    }
 
-	g, gCtx := errgroup.WithContext(ctx)
-	var data []db.ListEventRow
-	var total int64
+    listArg := db.ListEventParams{
+        AreaID:     areaIDArg,
+        Tahun:      tahunArg,
+        Bulan:      bulanArg,
+        Keyword:    keywordArg,
+        LimitData:  int32(limit),
+        OffsetData: int32(offset),
+    }
+    
+    countArg := db.CountEventParams{
+        AreaID:  areaIDArg,
+        Tahun:   tahunArg,
+        Bulan:   bulanArg,
+        Keyword: keywordArg,
+    }
 
-	g.Go(func() error {
-		var err error
-		data, err = h.Queries.ListEvent(gCtx, listArg)
-		return err
-	})
-	g.Go(func() error {
-		var err error
-		total, err = h.Queries.CountEvent(gCtx, countArg)
-		return err
-	})
+    g, gCtx := errgroup.WithContext(ctx)
+    var data []db.ListEventRow
+    var total int64
 
-	if err := g.Wait(); err != nil {
-		slog.Error("public.event.list_error", slog.String("err", err.Error()))
-		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-			Code:    "ERR_INTERNAL_DB",
-			Message: "Gagal mengambil data event",
-		})
-	}
+    g.Go(func() error {
+        var err error
+        data, err = h.Queries.ListEvent(gCtx, listArg)
+        return err
+    })
+    
+    g.Go(func() error {
+        var err error
+        total, err = h.Queries.CountEvent(gCtx, countArg)
+        return err
+    })
 
-	if data == nil {
-		data = []db.ListEventRow{}
-	}
+    if err := g.Wait(); err != nil {
+        slog.Error("public.event.list_error", slog.String("err", err.Error()))
+        return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+            Code:    "ERR_INTERNAL_DB",
+            Message: "Gagal mengambil data event",
+        })
+    }
 
-	res := SuccessResponse{
-		Pesan:      "Daftar Event",
-		Data:       data,
-		Pagination: buildPaginationMeta(page, limit, total),
-	}
-	return cacheJSON(c, cacheKey, CacheTTLEventList, res)
+    if data == nil {
+        data = []db.ListEventRow{}
+    }
+
+    res := SuccessResponse{
+        Pesan:      "Daftar Event",
+        Data:       data,
+        Pagination: buildPaginationMeta(page, limit, total),
+    }
+    
+    return cacheJSON(c, cacheKey, CacheTTLEventList, res)
 }
 
 // =============================================================================
@@ -185,36 +186,36 @@ func (h *EventHandler) ListEvent(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *EventHandler) GetDetailEvent(c fiber.Ctx) error {
-	slug := strings.TrimSpace(c.Params("slug"))
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "Slug event tidak valid",
-		})
-	}
+    id, err := strconv.Atoi(c.Params("id"))
+    if err != nil || id <= 0 {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "ID event tidak valid",
+        })
+    }
 
-	cacheKey := "event:detail:" + slug
-	if respondCached(c, cacheKey) {
-		return nil
-	}
+    cacheKey := fmt.Sprintf("event:detail:%d", id)
+    if respondCached(c, cacheKey) {
+        return nil
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+    defer cancel()
 
-	data, err := h.Queries.GetEventBySlug(ctx, slug)
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
-				Code: "ERR_TIMEOUT", Message: "Server sedang sibuk",
-			})
-		}
-		slog.Warn("public.event.detail_not_found", slog.String("slug", slug))
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
-		})
-	}
+    data, err := h.Queries.GetEventByIDPublic(ctx, int32(id))
+    if err != nil {
+        if errors.Is(err, context.DeadlineExceeded) {
+            return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+                Code: "ERR_TIMEOUT", Message: "Server sedang sibuk",
+            })
+        }
+        slog.Warn("public.event.detail_not_found", slog.Int("id", id))
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
+        })
+    }
 
-	res := SuccessResponse{Pesan: "Detail Event", Data: EventDetailResponse{Event: data}}
-	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
+    res := SuccessResponse{Pesan: "Detail Event", Data: EventDetailResponse{Event: data}}
+    return cacheJSON(c, cacheKey, CacheTTLDetail, res)
 }
 
 // =============================================================================
@@ -226,10 +227,15 @@ func (h *EventHandler) GetEventMaps(c fiber.Ctx) error {
 	if errArea != nil {
 		return validationErrorResponse(c, errArea)
 	}
+	
+	keyword, errKw := utils.ValidateQueryString(c.Query("search"), 100, "search")
+	if errKw != nil {
+		return validationErrorResponse(c, errKw)
+	}
 
 	tahunStr := strings.TrimSpace(c.Query("tahun"))
 
-	cacheKey := fmt.Sprintf("event:maps:area_%s:tahun_%s", normalizeKey(areaName), tahunStr)
+	cacheKey := fmt.Sprintf("event:maps:area_%s:tahun_%s:keyword_%s", normalizeKey(areaName), tahunStr, normalizeKey(keyword))
 	if respondCached(c, cacheKey) {
 		return nil
 	}
@@ -257,12 +263,27 @@ func (h *EventHandler) GetEventMaps(c fiber.Ctx) error {
 		}
 	}
 
-	data, err := h.Queries.ListEventMaps(ctx, db.ListEventMapsParams{AreaID: areaIDArg, Tahun: tahunArg})
+	var keywordArg pgtype.Text
+	if keyword != "" {
+		keywordArg = pgtype.Text{String: keyword, Valid: true}
+	}
+
+	data, err := h.Queries.ListEventMaps(ctx, db.ListEventMapsParams{
+		AreaID:  areaIDArg,
+		Tahun:   tahunArg,
+		Keyword: keywordArg, 
+	})
 	if err != nil {
 		slog.Error("public.event.maps_error", slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code: "ERR_INTERNAL_DB", Message: "Gagal mengambil data peta event",
 		})
+	}
+
+	if len(data) == 1 && areaName == "" {
+		center.Lat = data[0].Lat
+		center.Lng = data[0].Lng
+		center.Zoom = 13
 	}
 
 	if data == nil {
@@ -338,29 +359,29 @@ func (h *EventHandler) GetTahunTersedia(c fiber.Ctx) error {
 }
 
 // =============================================================================
-// ADMIN: GET DETAIL by ID
+// ADMIN: GET DETAIL by SLUG
 // =============================================================================
 
-func (h *EventHandler) GetEventByID(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "ID event tidak valid",
-		})
-	}
+func (h *EventHandler) GetEventBySlugAdmin(c fiber.Ctx) error {
+    slugParam := strings.TrimSpace(c.Params("slug"))
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Slug event tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+    defer cancel()
 
-	data, err := h.Queries.GetEventByID(ctx, int32(id))
-	if err != nil {
-		slog.Warn("admin.event.not_found", slog.Int("id", id))
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
-		})
-	}
+    data, err := h.Queries.GetEventBySlugAdmin(ctx, slugParam)
+    if err != nil {
+        slog.Warn("admin.event.not_found", slog.String("slug", slugParam))
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
+        })
+    }
 
-	return c.JSON(SuccessResponse{Pesan: "Detail Event", Data: data})
+    return c.JSON(SuccessResponse{Pesan: "Detail Event", Data: data})
 }
 
 // =============================================================================
@@ -438,6 +459,21 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		})
 	}
 
+	exists, errCheck := h.Queries.CheckEventNamaExists(ctx, nama)
+	if errCheck != nil {
+		slog.Error("admin.event.nama_check_error", slog.String("err", errCheck.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code: "ERR_INTERNAL_DB", Message: "Gagal memvalidasi nama event",
+		})
+	}
+	if exists {
+		return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+			Code: "ERR_CONFLICT", Message: "Event dengan nama ini sudah ada",
+		})
+	}
+
+	slugBaru := utils.GenerateSlug(nama)
+
 	thumbHeader, errT := c.FormFile("gambar_thumbnail")
 	if errT != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -468,8 +504,6 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		})
 	}
 
-	slugBaru := utils.GenerateSlug(nama)
-
 	idBaru, errDb := h.Queries.CreateEvent(ctx, db.CreateEventParams{
 		AreaID:               area.ID,
 		Nama:                 nama,
@@ -489,7 +523,8 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		destroyImageAsync(h.Cld, thumbPubID)
 		destroyImageAsync(h.Cld, heroPubID)
 
-		if strings.Contains(errDb.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(errDb, &pgErr) && pgErr.Code == "23505" {
 			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
 				Code: "ERR_CONFLICT", Message: "Event dengan nama atau slug ini sudah ada",
 			})
@@ -500,7 +535,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		})
 	}
 
-	invalidateEventCache()
+	invalidateEventCache(idBaru.ID)
 	slog.Info("admin.event.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
@@ -517,161 +552,195 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "ID event tidak valid",
-		})
-	}
+    slugParam := strings.TrimSpace(c.Params("slug"))
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Slug event tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+    defer cancel()
 
-	old, errCari := h.Queries.GetEventByID(ctx, int32(id))
-	if errCari != nil {
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
-		})
-	}
+    old, errCari := h.Queries.GetEventBySlugAdmin(ctx, slugParam)
+    if errCari != nil {
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
+        })
+    }
 
-	finalAreaID := old.AreaID
-	finalNama := old.Nama
-	finalSlug := old.Slug
-	finalDeskripsi := old.Deskripsi
-	finalAlamat := old.Alamat
-	finalTglMulai := old.TanggalMulai
-	finalTglSelesai := old.TanggalSelesai
-	finalInfoTiket := old.InfoTiket
-	finalHarga := old.HargaTiket
-	finalLat := old.Lat
-	finalLng := old.Lng
-	finalThumbURL := old.GambarUrlThumbnail
-	finalHeroURL := old.GambarUrlHero
+    finalAreaID := old.AreaID
+    finalNama := old.Nama
+    finalSlug := old.Slug
+    finalDeskripsi := old.Deskripsi
+    finalAlamat := old.Alamat
+    finalTglMulai := old.TanggalMulai
+    finalTglSelesai := old.TanggalSelesai
+    finalInfoTiket := old.InfoTiket
+    finalHarga := old.HargaTiket
+    finalLat := old.Lat
+    finalLng := old.Lng
+    finalThumbURL := old.GambarUrlThumbnail
+    finalHeroURL := old.GambarUrlHero
 
-	if v := strings.TrimSpace(c.FormValue("area")); v != "" {
-		area, errArea := h.Queries.GetAreaByName(ctx, v)
-		if errArea != nil {
-			return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-				Code: "ERR_NOT_FOUND", Message: "Area '" + v + "' tidak ditemukan",
-			})
-		}
-		finalAreaID = area.ID
-	}
-	if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
-		finalNama = v
-		finalSlug = utils.GenerateSlug(v)
-	}
-	if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
-		finalDeskripsi = v
-	}
-	if v := strings.TrimSpace(c.FormValue("alamat")); v != "" {
-		finalAlamat = v
-	}
-	if v := strings.TrimSpace(c.FormValue("tanggal_mulai")); v != "" {
-		if t, err := time.Parse("2006-01-02", v); err == nil {
-			finalTglMulai = pgtype.Date{Time: t, Valid: true}
-		}
-	}
-	if v := strings.TrimSpace(c.FormValue("tanggal_selesai")); v != "" {
-		if t, err := time.Parse("2006-01-02", v); err == nil {
-			finalTglSelesai = pgtype.Date{Time: t, Valid: true}
-		}
-	}
-	// Validate tanggal urutan kalau salah satu di-update
-	if finalTglMulai.Valid && finalTglSelesai.Valid && finalTglSelesai.Time.Before(finalTglMulai.Time) {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "Tanggal selesai harus >= tanggal mulai",
-		})
-	}
+    if v := strings.TrimSpace(c.FormValue("area")); v != "" {
+        area, errArea := h.Queries.GetAreaByName(ctx, v)
+        if errArea != nil {
+            return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+                Code: "ERR_NOT_FOUND", Message: "Area '" + v + "' tidak ditemukan",
+            })
+        }
+        finalAreaID = area.ID
+    }
+    if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
+        finalNama = v
+        finalSlug = utils.GenerateSlug(v)
+    }
+    if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
+        finalDeskripsi = v
+    }
+    if v := strings.TrimSpace(c.FormValue("alamat")); v != "" {
+        finalAlamat = v
+    }
+    if v := strings.TrimSpace(c.FormValue("tanggal_mulai")); v != "" {
+        t, err := time.Parse("2006-01-02", v)
+        if err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format tanggal_mulai salah (YYYY-MM-DD)",
+            })
+        }
+        finalTglMulai = pgtype.Date{Time: t, Valid: true}
+    }
+    if v := strings.TrimSpace(c.FormValue("tanggal_selesai")); v != "" {
+        t, err := time.Parse("2006-01-02", v)
+        if err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format tanggal_selesai salah (YYYY-MM-DD)",
+            })
+        }
+        finalTglSelesai = pgtype.Date{Time: t, Valid: true}
+    }
+    if finalTglMulai.Valid && finalTglSelesai.Valid && finalTglSelesai.Time.Before(finalTglMulai.Time) {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Tanggal selesai harus >= tanggal mulai",
+        })
+    }
 
-	if v := strings.TrimSpace(c.FormValue("info_tiket")); v != "" {
-		finalInfoTiket = v
-	}
-	if v := strings.TrimSpace(c.FormValue("harga_tiket")); v != "" {
-		if hg, err := strconv.Atoi(v); err == nil && hg >= 0 {
-			finalHarga = int32(hg)
-		}
-	}
-	if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
-		_ = finalLat.Scan(v)
-	}
-	if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
-		_ = finalLng.Scan(v)
-	}
+    if v := strings.TrimSpace(c.FormValue("info_tiket")); v != "" {
+        finalInfoTiket = v
+    }
+    if v := strings.TrimSpace(c.FormValue("harga_tiket")); v != "" {
+        if hg, err := strconv.Atoi(v); err == nil && hg >= 0 {
+            finalHarga = int32(hg)
+        }
+    }
+    if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
+        if err := finalLat.Scan(v); err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format latitude tidak valid",
+            })
+        }
+    }
+    if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
+        if err := finalLng.Scan(v); err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format longitude tidak valid",
+            })
+        }
+    }
 
-	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
-	defer cancelUpload()
+    if finalNama != old.Nama {
+        exists, errCheck := h.Queries.CheckEventNamaExistsExcluding(ctx, db.CheckEventNamaExistsExcludingParams{
+            Nama:    finalNama,
+            OldSlug: old.Slug,
+        })
+        if errCheck != nil {
+            slog.Error("admin.event.nama_check_error", slog.String("err", errCheck.Error()))
+            return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+                Code: "ERR_INTERNAL_DB", Message: "Gagal memvalidasi nama event",
+            })
+        }
+        if exists {
+            return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+                Code: "ERR_CONFLICT", Message: "Event dengan nama ini sudah ada",
+            })
+        }
+    }
 
-	var newThumbPubID, newHeroPubID string
-	var oldThumbToDelete, oldHeroToDelete string
+    uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+    defer cancelUpload()
 
-	if thumbHeader, errT := c.FormFile("gambar_thumbnail"); errT == nil {
-		url, pubID, errUp := uploadImage(uploadCtx, h.Cld, thumbHeader, "sidita_event/thumbnail")
-		if errUp != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-				Code: "ERR_FILE_UPLOAD", Message: "Gagal upload thumbnail: " + errUp.Error(),
-			})
-		}
-		newThumbPubID = pubID
-		oldThumbToDelete = utils.ExtractPublicID(old.GambarUrlThumbnail)
-		finalThumbURL = url
-	}
-	if heroHeader, errH := c.FormFile("gambar_hero"); errH == nil {
-		url, pubID, errUp := uploadImage(uploadCtx, h.Cld, heroHeader, "sidita_event/hero")
-		if errUp != nil {
-			destroyImageAsync(h.Cld, newThumbPubID)
-			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-				Code: "ERR_FILE_UPLOAD", Message: "Gagal upload hero: " + errUp.Error(),
-			})
-		}
-		newHeroPubID = pubID
-		oldHeroToDelete = utils.ExtractPublicID(old.GambarUrlHero)
-		finalHeroURL = url
-	}
+    var newThumbPubID, newHeroPubID string
+    var oldThumbToDelete, oldHeroToDelete string
 
-	if err := h.Queries.UpdateEvent(ctx, db.UpdateEventParams{
-		ID:                   old.ID,
-		AreaID:               finalAreaID,
-		Nama:                 finalNama,
-		Slug:                 finalSlug,
-		Deskripsi:            finalDeskripsi,
-		Alamat:               finalAlamat,
-		TanggalMulai:         finalTglMulai,
-		TanggalSelesai:       finalTglSelesai,
-		InfoTiket:            finalInfoTiket,
-		HargaTiket:           finalHarga,
-		GambarUrlThumbnail:   finalThumbURL,
-		GambarUrlHero:        finalHeroURL,
-		Lat:                  finalLat,
-		Lng:                  finalLng,
-	}); err != nil {
-		destroyImageAsync(h.Cld, newThumbPubID)
-		destroyImageAsync(h.Cld, newHeroPubID)
+    if thumbHeader, errT := c.FormFile("gambar_thumbnail"); errT == nil {
+        url, pubID, errUp := uploadImage(uploadCtx, h.Cld, thumbHeader, "sidita_event/thumbnail")
+        if errUp != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_FILE_UPLOAD", Message: "Gagal upload thumbnail: " + errUp.Error(),
+            })
+        }
+        newThumbPubID = pubID
+        oldThumbToDelete = utils.ExtractPublicID(old.GambarUrlThumbnail)
+        finalThumbURL = url
+    }
+    if heroHeader, errH := c.FormFile("gambar_hero"); errH == nil {
+        url, pubID, errUp := uploadImage(uploadCtx, h.Cld, heroHeader, "sidita_event/hero")
+        if errUp != nil {
+            destroyImageAsync(h.Cld, newThumbPubID)
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_FILE_UPLOAD", Message: "Gagal upload hero: " + errUp.Error(),
+            })
+        }
+        newHeroPubID = pubID
+        oldHeroToDelete = utils.ExtractPublicID(old.GambarUrlHero)
+        finalHeroURL = url
+    }
 
-		if strings.Contains(err.Error(), "duplicate key") {
-			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
-				Code: "ERR_CONFLICT", Message: "Event dengan nama atau slug ini sudah ada",
-			})
-		}
-		slog.Error("admin.event.update_error", slog.String("err", err.Error()))
-		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-			Code: "ERR_INTERNAL_DB", Message: "Gagal mengupdate event",
-		})
-	}
+    if err := h.Queries.UpdateEvent(ctx, db.UpdateEventParams{
+        AreaID:               finalAreaID,
+        Nama:                 finalNama,
+        SlugBaru:             finalSlug,
+        SlugLama:             old.Slug,
+        Deskripsi:            finalDeskripsi,
+        Alamat:               finalAlamat,
+        TanggalMulai:         finalTglMulai,
+        TanggalSelesai:       finalTglSelesai,
+        InfoTiket:            finalInfoTiket,
+        HargaTiket:           finalHarga,
+        GambarUrlThumbnail:   finalThumbURL,
+        GambarUrlHero:        finalHeroURL,
+        Lat:                  finalLat,
+        Lng:                  finalLng,
+    }); err != nil {
+        destroyImageAsync(h.Cld, newThumbPubID)
+        destroyImageAsync(h.Cld, newHeroPubID)
 
-	destroyImageAsync(h.Cld, oldThumbToDelete)
-	destroyImageAsync(h.Cld, oldHeroToDelete)
+        var pgErr *pgconn.PgError
+        if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+            return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+                Code: "ERR_CONFLICT", Message: "Event dengan nama atau slug ini sudah ada",
+            })
+        }
+        slog.Error("admin.event.update_error", slog.String("err", err.Error()))
+        return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+            Code: "ERR_INTERNAL_DB", Message: "Gagal mengupdate event",
+        })
+    }
 
-	invalidateEventCache(old.Slug, finalSlug)
-	slog.Info("admin.event.updated", slog.Int("id", id), slog.String("slug", finalSlug))
+    destroyImageAsync(h.Cld, oldThumbToDelete)
+    destroyImageAsync(h.Cld, oldHeroToDelete)
 
-	return c.JSON(SuccessResponse{
-		Pesan: "Event berhasil diupdate",
-		Data: EventActionResponse{
-			ID: old.ID, Nama: finalNama, Slug: finalSlug,
-			GambarUrlThumbnail: finalThumbURL, GambarUrlHero: finalHeroURL,
-		},
-	})
+    invalidateEventCache(old.ID)
+    slog.Info("admin.event.updated", slog.Int("id", int(old.ID)), slog.String("slug", finalSlug))
+
+    return c.JSON(SuccessResponse{
+        Pesan: "Event berhasil diupdate",
+        Data: EventActionResponse{
+            ID: old.ID, Nama: finalNama, Slug: finalSlug,
+            GambarUrlThumbnail: finalThumbURL, GambarUrlHero: finalHeroURL,
+        },
+    })
 }
 
 // =============================================================================
@@ -679,37 +748,37 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "ID event tidak valid",
-		})
-	}
+    slugParam := strings.TrimSpace(c.Params("slug"))
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Slug event tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+    defer cancel()
 
-	old, errCari := h.Queries.GetEventByID(ctx, int32(id))
-	if errCari != nil {
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
-		})
-	}
+    old, errCari := h.Queries.GetEventBySlugAdmin(ctx, slugParam)
+    if errCari != nil {
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Event tidak ditemukan",
+        })
+    }
 
-	if err := h.Queries.DeleteEvent(ctx, old.ID); err != nil {
-		slog.Error("admin.event.delete_error", slog.String("err", err.Error()))
-		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-			Code: "ERR_INTERNAL_DB", Message: "Gagal menghapus event",
-		})
-	}
+    if err := h.Queries.DeleteEvent(ctx, old.Slug); err != nil {
+        slog.Error("admin.event.delete_error", slog.String("err", err.Error()))
+        return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+            Code: "ERR_INTERNAL_DB", Message: "Gagal menghapus event",
+        })
+    }
 
-	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlThumbnail))
-	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlHero))
+    destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlThumbnail))
+    destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlHero))
 
-	invalidateEventCache(old.Slug)
-	slog.Info("admin.event.deleted", slog.Int("id", id), slog.String("slug", old.Slug))
+    invalidateEventCache(old.ID)
+    slog.Info("admin.event.deleted", slog.Int("id", int(old.ID)), slog.String("slug", old.Slug))
 
-	return c.JSON(SuccessResponse{Pesan: "Event berhasil dihapus"})
+    return c.JSON(SuccessResponse{Pesan: "Event berhasil dihapus"})
 }
 
 // =============================================================================
