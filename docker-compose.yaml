@@ -6,6 +6,7 @@ include:
   - ./bapenda-service/docker-compose.yml
   - ./api-gateway/docker-compose.yaml
   - ./klinik-service/docker-compose.yml
+  - ./rssa-service/docker-compose.yml
 
 networks:
   capstone-global-network:
