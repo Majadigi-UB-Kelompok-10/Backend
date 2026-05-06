@@ -74,17 +74,22 @@ func SetupDynamicEndpoint(app *fiber.App) {
 		}
 
 		extraPath := c.Params("*")
-		if extraPath != "" {
-			targetUrl = targetUrl + "/" + extraPath
-		}
+        if extraPath != "" {
+            targetUrl = targetUrl + "/" + extraPath
+        }
 
-		if err := proxy.Do(c, targetUrl); err != nil {
-			fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
-			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-				"error":   "Bad Gateway",
-				"message": "Layanan sedang mengalami gangguan.",
-			})
-		}
+        queryString := string(c.Request().URI().QueryString())
+        if queryString != "" {
+            targetUrl = targetUrl + "?" + queryString
+        }
+
+        if err := proxy.Do(c, targetUrl); err != nil {
+            fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
+            return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+                "error":   "Bad Gateway",
+                "message": "Layanan sedang mengalami gangguan.",
+            })
+        }
 
 		return nil
 	})
