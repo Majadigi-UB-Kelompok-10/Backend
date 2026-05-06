@@ -64,14 +64,12 @@ func SetupRoutes(app *fiber.App, h *handlers.BapendaHandler) {
 
 	admin := api.Group("/admin")
 
-	// Pajak Kendaraan
 	admin.Get("/pajak", searchLimiter, h.GetAllInfoPajakAdmin)
-	admin.Get("/pajak/:plat", searchLimiter, h.GetDetailPajakAdmin)
+	admin.Get("/pajak/:id", h.GetDetailPajakAdmin)
 	admin.Post("/pajak", actionLimiter, h.CreateInfoPajak)
-	admin.Put("/pajak/:plat", actionLimiter, h.UpdateInfoPajak)
-	admin.Delete("/pajak/:plat", actionLimiter, h.DeleteInfoPajak)
+	admin.Put("/pajak/:id", actionLimiter, h.UpdateInfoPajak)
+	admin.Delete("/pajak/:id", actionLimiter, h.DeleteInfoPajak)
 
-	// Master NJKB
 	admin.Get("/njkb", searchLimiter, h.GetAllMasterNjkbAdmin)
 	admin.Get("/njkb/:id", searchLimiter, h.GetDetailMasterNjkbAdmin)
 	admin.Post("/njkb", actionLimiter, h.CreateMasterNjkb)
