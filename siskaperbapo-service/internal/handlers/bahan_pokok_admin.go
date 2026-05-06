@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
 	"github.com/farildzaky/siskaperbapo-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -27,6 +29,24 @@ func (h *SiskaperbapoHandler) CreateBahanPokok(c fiber.Ctx) error {
 		satuan = "kg"
 	}
 
+	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
+	defer cancelDb()
+
+	exists, errCheck := h.Queries.CheckBahanPokokNamaExists(ctxDb, nama)
+	if errCheck != nil {
+		slog.Error("admin.bahan_pokok.nama_check_error", slog.String("err", errCheck.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal memvalidasi nama komoditas",
+		})
+	}
+	if exists {
+		return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+			Code:    "ERR_CONFLICT",
+			Message: "Bahan pokok dengan nama ini sudah ada",
+		})
+	}
+
 	gambarHeader, errT := c.FormFile("gambar")
 	if errT != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -38,7 +58,6 @@ func (h *SiskaperbapoHandler) CreateBahanPokok(c fiber.Ctx) error {
 	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
 	defer cancelUpload()
 
-	// 🚀 PANGGIL FUNGSI SAKTI DARI handler_utils.go
 	gambarURL, gambarPubID, errUp := uploadImage(uploadCtx, h.Cld, gambarHeader, "siskaperbapo/komoditas")
 	if errUp != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -49,9 +68,6 @@ func (h *SiskaperbapoHandler) CreateBahanPokok(c fiber.Ctx) error {
 
 	slugBaru := generateSlug(nama)
 
-	ctxDb, cancelDb := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancelDb()
-
 	idBaru, errDb := h.Queries.CreateBahanPokok(ctxDb, db.CreateBahanPokokParams{
 		Nama:      nama,
 		Slug:      slugBaru,
@@ -60,8 +76,9 @@ func (h *SiskaperbapoHandler) CreateBahanPokok(c fiber.Ctx) error {
 	})
 
 	if errDb != nil {
-		destroyImageAsync(h.Cld, gambarPubID) // Rollback gambar kalau DB gagal
-		if strings.Contains(errDb.Error(), "duplicate key") {
+		destroyImageAsync(h.Cld, gambarPubID) 
+		var pgErr *pgconn.PgError
+		if errors.As(errDb, &pgErr) && pgErr.Code == "23505" {
 			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
 				Code:    "ERR_CONFLICT",
 				Message: "Bahan pokok ini sudah ada di database!",
@@ -76,8 +93,10 @@ func (h *SiskaperbapoHandler) CreateBahanPokok(c fiber.Ctx) error {
 
 	invalidateAllBahanCache()
 
+	slog.Info("admin.bahan_pokok.created", slog.Int("id", int(idBaru.ID)), slog.String("nama", idBaru.Nama))
+
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
-		Pesan: "Mantap! Komoditas berhasil disimpan.",
+		Pesan: "Komoditas berhasil disimpan.",
 		Data: BahanPokokItemResponse{
 			ID:        idBaru.ID,
 			Nama:      idBaru.Nama,
@@ -114,12 +133,34 @@ func (h *SiskaperbapoHandler) UpdateBahanPokok(c fiber.Ctx) error {
 	finalImageUrl := oldData.GambarUrl
 	nama := strings.TrimSpace(c.FormValue("nama"))
 	satuan := strings.TrimSpace(c.FormValue("satuan"))
-	
-	if err := requireFields(c, map[string]string{"nama": nama}); err != nil {
-		return err
-	}
+
+	finalNama := oldData.Nama
+	finalSlug := oldData.Slug
+
 	if satuan == "" {
-		satuan = "kg"
+		satuan = oldData.Satuan
+	}
+
+	if nama != "" && !strings.EqualFold(nama, oldData.Nama) {
+		exists, errCheck := h.Queries.CheckBahanPokokNamaExistsExcluding(ctxDb, db.CheckBahanPokokNamaExistsExcludingParams{
+			Nama: nama,
+			ID:   int32(id),
+		})
+		if errCheck != nil {
+			slog.Error("admin.bahan_pokok.nama_check_error", slog.String("err", errCheck.Error()))
+			return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+				Code:    "ERR_INTERNAL_DB",
+				Message: "Gagal memvalidasi nama komoditas",
+			})
+		}
+		if exists {
+			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+				Code:    "ERR_CONFLICT",
+				Message: "Bahan pokok dengan nama ini sudah ada",
+			})
+		}
+		finalNama = nama
+		finalSlug = generateSlug(nama)
 	}
 
 	var newPubID, oldPubIDToDelete string
@@ -140,26 +181,29 @@ func (h *SiskaperbapoHandler) UpdateBahanPokok(c fiber.Ctx) error {
 		oldPubIDToDelete = utils.ExtractPublicID(oldData.GambarUrl.String)
 	}
 
-	slugBaru := generateSlug(nama)
-	dataUpdate, errDb := h.Queries.UpdateBahanPokok(ctxDb, db.UpdateBahanPokokParams{
+	ctxUpdate, cancelUpdate := context.WithTimeout(context.Background(), ContextDBTimeout)
+	defer cancelUpdate()
+
+	dataUpdate, errDb := h.Queries.UpdateBahanPokok(ctxUpdate, db.UpdateBahanPokokParams{
 		ID:        int32(id),
-		Nama:      nama,
-		Slug:      slugBaru,
+		Nama:      finalNama,
+		Slug:      finalSlug,
 		Satuan:    satuan,
 		GambarUrl: finalImageUrl,
 	})
 
 	if errDb != nil {
-		destroyImageAsync(h.Cld, newPubID) // Rollback upload jika DB gagal
+		destroyImageAsync(h.Cld, newPubID)
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Gagal mengupdate bahan pokok",
 		})
 	}
 
-	// Jika sukses, hapus foto lama dari Cloudinary
 	destroyImageAsync(h.Cld, oldPubIDToDelete)
 	invalidateAllBahanCache()
+
+	slog.Info("admin.bahan_pokok.updated", slog.Int("id", int(dataUpdate.ID)), slog.String("nama", dataUpdate.Nama))
 
 	return c.JSON(SuccessResponse{
 		Pesan: "Komoditas berhasil diperbarui.",
@@ -206,7 +250,9 @@ func (h *SiskaperbapoHandler) DeleteBahanPokok(c fiber.Ctx) error {
 	destroyImageAsync(h.Cld, utils.ExtractPublicID(oldData.GambarUrl.String))
 	invalidateAllBahanCache()
 
-	return c.JSON(SuccessResponse{Pesan: "Bahan pokok dan fotonya berhasil dihapus permanen!"})
+	slog.Info("admin.bahan_pokok.deleted", slog.Int("id", id), slog.String("nama", oldData.Nama))
+
+	return c.JSON(SuccessResponse{Pesan: "Bahan pokok berhasil dihapus."})
 }
 
 // =====================================================================
@@ -239,7 +285,6 @@ func (h *SiskaperbapoHandler) CreateHargaHarian(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	// 🚀 EKSEKUSI UPSERT DARI QUERIES BARU KITA
 	_, errDb := h.Queries.UpsertHargaHarian(ctx, db.UpsertHargaHarianParams{
 		BahanPokokID: req.BahanPokokID,
 		AreaID:       req.AreaID,
@@ -257,8 +302,10 @@ func (h *SiskaperbapoHandler) CreateHargaHarian(c fiber.Ctx) error {
 
 	invalidateAllBahanCache()
 
+	slog.Info("admin.harga.upserted", slog.Int("bahan_pokok_id", int(req.BahanPokokID)), slog.String("tanggal", req.Tanggal))
+
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
-		Pesan: "Mantap! Harga berhasil dicatat/diperbarui.",
+		Pesan: "Harga berhasil dicatat.",
 		Data:  req,
 	})
 }
