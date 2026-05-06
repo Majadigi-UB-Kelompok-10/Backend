@@ -7,13 +7,14 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-    "time"
+	"time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
 )
@@ -31,11 +32,14 @@ func NewDestinasiHandler(q *db.Queries, cld *cloudinary.Cloudinary) *DestinasiHa
 // CACHE INVALIDATION HELPERS
 // =============================================================================
 
-
-func invalidateDestinasiCache(slugs ...string) {
+func invalidateDestinasiCache(id int32, slugs ...string) {
 	cache.GlobalCache.DeleteByPrefix("destinasi:list:")
 	cache.GlobalCache.DeleteByPrefix("destinasi:maps:")
 	cache.GlobalCache.Delete("destinasi:recommendation")
+	
+	if id > 0 {
+		cache.GlobalCache.Delete(fmt.Sprintf("destinasi:detail:id:%d", id))
+	}
 	for _, s := range slugs {
 		if s != "" {
 			cache.GlobalCache.Delete("destinasi:detail:" + s)
@@ -157,19 +161,19 @@ func (h *DestinasiHandler) ListDestinasi(c fiber.Ctx) error {
 }
 
 // =============================================================================
-// PUBLIC: GET DETAIL DESTINASI by SLUG
+// PUBLIC / MOBILE: GET DETAIL DESTINASI by ID
 // =============================================================================
 
 func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
-	slug := strings.TrimSpace(c.Params("slug"))
-	if slug == "" {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "Slug destinasi tidak valid",
+			Message: "ID destinasi tidak valid",
 		})
 	}
 
-	cacheKey := "destinasi:detail:" + slug
+	cacheKey := fmt.Sprintf("destinasi:detail:id:%d", id)
 	if respondCached(c, cacheKey) {
 		return nil
 	}
@@ -177,7 +181,7 @@ func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.GetDestinasiBySlug(ctx, slug)
+	data, err := h.Queries.GetDestinasiByIDPublic(ctx, int32(id))
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
@@ -185,14 +189,14 @@ func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
 				Message: "Server sedang sibuk",
 			})
 		}
-		slog.Warn("public.destinasi.detail_not_found", slog.String("slug", slug))
+		slog.Warn("public.destinasi.detail_not_found", slog.Int("id", id))
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
 			Message: "Destinasi tidak ditemukan",
 		})
 	}
 
-	res := SuccessResponse{Pesan: "Detail Destinasi", Data: DestinasiDetailResponse{Destinasi: data}}
+	res := SuccessResponse{Pesan: "Detail Destinasi", Data: data}
 	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
 }
 
@@ -201,37 +205,39 @@ func (h *DestinasiHandler) GetDetailDestinasi(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *DestinasiHandler) GetDestinasiMaps(c fiber.Ctx) error {
-	areaName, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
-	if errArea != nil {
-		return validationErrorResponse(c, errArea)
-	}
+    areaName, _ := utils.ValidateQueryString(c.Query("area"), 100, "area")
+    keyword, _ := utils.ValidateQueryString(c.Query("search"), 100, "search")
 
-	cacheKey := "destinasi:maps:area_" + normalizeKey(areaName)
-	if respondCached(c, cacheKey) {
-		return nil
-	}
+    cacheKey := fmt.Sprintf("destinasi:maps:area_%s:keyword_%s", normalizeKey(areaName), normalizeKey(keyword))
+    if respondCached(c, cacheKey) {
+        return nil
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+    defer cancel()
 
-	center := MapsCenter{
-		Lat:  "-7.697739",
-		Lng:  "112.493863",
-		Zoom: 8,
-	}
+    center := MapsCenter{Lat: "-7.697739", Lng: "112.493863", Zoom: 8}
+    var areaIDArg pgtype.Int4
+    
+    if areaName != "" {
+        area, err := h.Queries.GetAreaByName(ctx, areaName)
+        if err == nil {
+            areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
+            center.Lat = area.Lat
+            center.Lng = area.Lng
+            center.Zoom = 11
+        }
+    }
 
-	var areaIDArg pgtype.Int4
-	if areaName != "" {
-		area, err := h.Queries.GetAreaByName(ctx, areaName)
-		if err == nil {
-			areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
-			center.Lat = area.Lat
-			center.Lng = area.Lng
-			center.Zoom = 11
-		}
-	}
+    var keywordArg pgtype.Text
+    if keyword != "" {
+        keywordArg = pgtype.Text{String: keyword, Valid: true}
+    }
 
-    data, err := h.Queries.ListDestinasiMaps(ctx, areaIDArg)
+    data, err := h.Queries.ListDestinasiMaps(ctx, db.ListDestinasiMapsParams{
+        AreaID:  areaIDArg,
+        Keyword: keywordArg,
+    })
 	if err != nil {
 		slog.Error("public.destinasi.maps_error", slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
@@ -239,6 +245,12 @@ func (h *DestinasiHandler) GetDestinasiMaps(c fiber.Ctx) error {
 			Message: "Gagal mengambil data peta destinasi",
 		})
 	}
+
+	if len(data) == 1 && areaName == "" {
+        center.Lat = data[0].Lat
+        center.Lng = data[0].Lng
+        center.Zoom = 13 
+    }
 
 	if data == nil {
 		data = []db.ListDestinasiMapsRow{}
@@ -285,24 +297,24 @@ func (h *DestinasiHandler) GetRecommendationDestinasi(c fiber.Ctx) error {
 }
 
 // =============================================================================
-// ADMIN: GET DETAIL by ID 
+// ADMIN: GET DETAIL by SLUG 
 // =============================================================================
 
-func (h *DestinasiHandler) GetDestinasiByID(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
+func (h *DestinasiHandler) GetDestinasiBySlugAdmin(c fiber.Ctx) error {
+	slugParam := strings.TrimSpace(c.Params("slug"))
+	if slugParam == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "ID destinasi tidak valid",
+			Message: "Slug destinasi tidak valid",
 		})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.GetDestinasiByID(ctx, int32(id))
+	data, err := h.Queries.GetDestinasiBySlugAdmin(ctx, slugParam)
 	if err != nil {
-		slog.Warn("admin.destinasi.not_found", slog.Int("id", id))
+		slog.Warn("admin.destinasi.not_found", slog.String("slug", slugParam))
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
 			Message: "Destinasi tidak ditemukan",
@@ -332,7 +344,6 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 		"nama":      nama,
 		"deskripsi": deskripsi,
 		"alamat":    alamat,
-		"highlight_text": highlight,
 		"lat":       latVal,
 		"lng":       lngVal,
 	}); err != nil {
@@ -363,6 +374,23 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 			Message: "Format longitude tidak valid",
 		})
 	}
+
+	exists, errCheck := h.Queries.CheckDestinasiNamaExists(ctx, nama)
+	if errCheck != nil {
+		slog.Error("admin.destinasi.nama_check_error", slog.String("err", errCheck.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal memvalidasi nama destinasi",
+		})
+	}
+	if exists {
+		return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+			Code:    "ERR_CONFLICT",
+			Message: "Destinasi dengan nama ini sudah ada",
+		})
+	}
+
+	slugBaru := utils.GenerateSlug(nama)
 
 	thumbHeader, errT := c.FormFile("gambar_thumbnail")
 	if errT != nil {
@@ -398,26 +426,25 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 		})
 	}
 
-	slugBaru := utils.GenerateSlug(nama)
-
 	idBaru, errDb := h.Queries.CreateDestinasi(ctx, db.CreateDestinasiParams{
-		AreaID:               area.ID,
-		Nama:                 nama,
-		Slug:                 slugBaru,
-		Kategori:             kategori,
-		Deskripsi:            deskripsi,
-		Alamat:               alamat,
-		HighlightText:        pgtype.Text{String: highlight, Valid: highlight != ""},
-		GambarUrlThumbnail:   thumbURL,
-		GambarUrlHero:        heroURL,
-		Lat:                  latPg,
-		Lng:                  lngPg,
+		AreaID:             area.ID,
+		Nama:               nama,
+		Slug:               slugBaru,
+		Kategori:           kategori,
+		Deskripsi:          deskripsi,
+		Alamat:             alamat,
+		HighlightText:      pgtype.Text{String: highlight, Valid: highlight != ""},
+		GambarUrlThumbnail: thumbURL,
+		GambarUrlHero:      heroURL,
+		Lat:                latPg,
+		Lng:                lngPg,
 	})
 	if errDb != nil {
 		destroyImageAsync(h.Cld, thumbPubID)
 		destroyImageAsync(h.Cld, heroPubID)
 
-		if strings.Contains(errDb.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(errDb, &pgErr) && pgErr.Code == "23505" {
 			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
 				Code:    "ERR_CONFLICT",
 				Message: "Destinasi dengan nama atau slug ini sudah ada",
@@ -430,7 +457,7 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 		})
 	}
 
-	invalidateDestinasiCache()
+	invalidateDestinasiCache(idBaru.ID, slugBaru)
 	slog.Info("admin.destinasi.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
@@ -453,18 +480,18 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
+	slugParam := strings.TrimSpace(c.Params("slug"))
+	if slugParam == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "ID destinasi tidak valid",
+			Message: "Slug destinasi tidak valid",
 		})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
 	defer cancel()
 
-	old, errCari := h.Queries.GetDestinasiByID(ctx, int32(id))
+	old, errCari := h.Queries.GetDestinasiBySlugAdmin(ctx, slugParam)
 	if errCari != nil {
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
@@ -500,7 +527,8 @@ func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
 	}
 	if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
 		finalNama = v
-		finalSlug = utils.GenerateSlug(v)
+		// Generate slug baru jika nama diubah
+		finalSlug = utils.GenerateSlug(v) 
 	}
 	if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
 		finalDeskripsi = v
@@ -512,10 +540,38 @@ func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
 		finalHighlight = pgtype.Text{String: v, Valid: true}
 	}
 	if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
-		_ = finalLat.Scan(v)
+		if err := finalLat.Scan(v); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Code: "ERR_VALIDATION", Message: "Format latitude tidak valid",
+			})
+		}
 	}
 	if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
-		_ = finalLng.Scan(v)
+		if err := finalLng.Scan(v); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Code: "ERR_VALIDATION", Message: "Format longitude tidak valid",
+			})
+		}
+	}
+
+	if finalNama != old.Nama {
+		exists, errCheck := h.Queries.CheckDestinasiNamaExistsExcluding(ctx, db.CheckDestinasiNamaExistsExcludingParams{
+			Nama:    finalNama,
+			OldSlug: old.Slug,
+		})
+		if errCheck != nil {
+			slog.Error("admin.destinasi.nama_check_error", slog.String("err", errCheck.Error()))
+			return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+				Code:    "ERR_INTERNAL_DB",
+				Message: "Gagal memvalidasi nama destinasi",
+			})
+		}
+		if exists {
+			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+				Code:    "ERR_CONFLICT",
+				Message: "Destinasi dengan nama ini sudah ada",
+			})
+		}
 	}
 
 	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
@@ -550,24 +606,25 @@ func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
 		finalHeroURL = url
 	}
 
-	if err := h.Queries.UpdateDestinasi(ctx, db.UpdateDestinasiParams{
-		ID:                   old.ID,
-		AreaID:               finalAreaID,
-		Nama:                 finalNama,
-		Slug:                 finalSlug,
-		Kategori:             finalKategori,
-		Deskripsi:            finalDeskripsi,
-		Alamat:               finalAlamat,
-		HighlightText:        finalHighlight,
-		GambarUrlThumbnail:   finalThumbURL,
-		GambarUrlHero:        finalHeroURL,
-		Lat:                  finalLat,
-		Lng:                  finalLng,
-	}); err != nil {
+		if err := h.Queries.UpdateDestinasi(ctx, db.UpdateDestinasiParams{
+        AreaID:               finalAreaID,
+        Nama:                 finalNama,
+        SlugBaru:             finalSlug, 
+        SlugLama:             old.Slug,  
+        Kategori:             finalKategori,
+        Deskripsi:            finalDeskripsi,
+        Alamat:               finalAlamat,
+        HighlightText:        finalHighlight,
+        GambarUrlThumbnail:   finalThumbURL,
+        GambarUrlHero:        finalHeroURL,
+        Lat:                  finalLat,
+        Lng:                  finalLng,
+    }); err != nil {
 		destroyImageAsync(h.Cld, newThumbPubID)
 		destroyImageAsync(h.Cld, newHeroPubID)
 
-		if strings.Contains(err.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
 				Code:    "ERR_CONFLICT",
 				Message: "Destinasi dengan nama atau slug ini sudah ada",
@@ -583,8 +640,8 @@ func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
 	destroyImageAsync(h.Cld, oldThumbToDelete)
 	destroyImageAsync(h.Cld, oldHeroToDelete)
 
-	invalidateDestinasiCache(old.Slug, finalSlug)
-	slog.Info("admin.destinasi.updated", slog.Int("id", id), slog.String("slug", finalSlug))
+	invalidateDestinasiCache(old.ID, old.Slug, finalSlug)
+	slog.Info("admin.destinasi.updated", slog.Int("id", int(old.ID)), slog.String("slug", finalSlug))
 
 	return c.JSON(SuccessResponse{
 		Pesan: "Destinasi berhasil diupdate",
@@ -603,18 +660,18 @@ func (h *DestinasiHandler) UpdateDestinasi(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *DestinasiHandler) DeleteDestinasi(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
+	slugParam := strings.TrimSpace(c.Params("slug"))
+	if slugParam == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Code:    "ERR_VALIDATION",
-			Message: "ID destinasi tidak valid",
+			Message: "Slug destinasi tidak valid",
 		})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
 	defer cancel()
 
-	old, errCari := h.Queries.GetDestinasiByID(ctx, int32(id))
+	old, errCari := h.Queries.GetDestinasiBySlugAdmin(ctx, slugParam)
 	if errCari != nil {
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
 			Code:    "ERR_NOT_FOUND",
@@ -622,7 +679,7 @@ func (h *DestinasiHandler) DeleteDestinasi(c fiber.Ctx) error {
 		})
 	}
 
-	if err := h.Queries.DeleteDestinasi(ctx, old.ID); err != nil {
+	if err := h.Queries.DeleteDestinasi(ctx, old.Slug); err != nil {
 		slog.Error("admin.destinasi.delete_error", slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
@@ -634,8 +691,9 @@ func (h *DestinasiHandler) DeleteDestinasi(c fiber.Ctx) error {
 	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlThumbnail))
 	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrlHero))
 
-	invalidateDestinasiCache(old.Slug)
-	slog.Info("admin.destinasi.deleted", slog.Int("id", id), slog.String("slug", old.Slug))
+	// Hapus cache
+	invalidateDestinasiCache(old.ID, old.Slug)
+	slog.Info("admin.destinasi.deleted", slog.Int("id", int(old.ID)), slog.String("slug", old.Slug))
 
 	return c.JSON(SuccessResponse{Pesan: "Destinasi berhasil dihapus"})
 }
