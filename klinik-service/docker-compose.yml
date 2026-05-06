@@ -50,6 +50,8 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CLOUDINARY_URL=${CLOUDINARY_URL}
       - GATEWAY_DATABASE_URL=${GATEWAY_DATABASE_URL}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SENDGRID_SENDER_EMAIL=${SENDGRID_SENDER_EMAIL}
     volumes:
       - .:/app
     depends_on:
