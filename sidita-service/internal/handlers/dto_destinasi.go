@@ -37,7 +37,7 @@ type DestinasiActionResponse struct {
 
 
 type DestinasiDetailResponse struct {
-	Destinasi db.GetDestinasiBySlugRow `json:"destinasi"`
+	Destinasi db.GetDestinasiByIDPublicRow `json:"destinasi"`
 }
 
 type MapsCenter struct {
