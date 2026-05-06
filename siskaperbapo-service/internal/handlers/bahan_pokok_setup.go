@@ -149,7 +149,7 @@ func (h *SiskaperbapoHandler) CacheWarmup() {
 		})
 	}
 
-	cacheKey := fmt.Sprintf("all_bahan:%s:page_1:limit_10:bahan_pokok_:area_", hariIni)
+	cacheKey := fmt.Sprintf("all_bahan:%s:page_1:limit_10:bahan_:area_", hariIni)
 	res := SuccessResponse{
 		Pesan:      "Daftar Komoditas (Warmup)",
 		Data:       finalData,
