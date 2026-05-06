@@ -34,8 +34,11 @@ jobs:
               - 'sidita-service/**'
             siskaperbapo-service:
               - 'siskaperbapo-service/**'
+            rssa-service:
+              - 'rssa-service/**'  
             user-service:
               - 'user-service/**'
+
 
 
   build:
