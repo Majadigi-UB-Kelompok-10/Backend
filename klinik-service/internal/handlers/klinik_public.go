@@ -127,7 +127,11 @@ func (h *HoaxHandler) SubmitReport(c fiber.Ctx) error {
 		ProofImageUrl: pgtype.Text{String: imageUrl, Valid: imageUrl != ""},
 	})
 	if err != nil {
-		slog.Error("public.report.create_failed", slog.String("err", err.Error()))
+		if imageUrl != "" {
+			slog.Warn("public.report.create_failed — gambar Cloudinary mungkin orphan", slog.String("imageUrl", imageUrl), slog.String("err", err.Error()))
+		} else {
+			slog.Error("public.report.create_failed", slog.String("err", err.Error()))
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Terjadi kendala saat menyimpan laporan",
