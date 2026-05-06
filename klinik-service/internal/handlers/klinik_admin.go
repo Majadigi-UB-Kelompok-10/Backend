@@ -265,18 +265,6 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 		})
 	}
 
-	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
-	defer cancelUpload()
-
-	imageUrl, errUp := h.uploadImageReal(uploadCtx, file, "klinik_hoaks_news")
-	if errUp != nil {
-		slog.Error("admin.upload.failed", slog.String("err", errUp.Error()))
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code:    "ERR_FILE_UPLOAD",
-			Message: "Gagal upload gambar admin: " + errUp.Error(),
-		})
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
@@ -290,6 +278,18 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+	defer cancelUpload()
+
+	imageUrl, errUp := h.uploadImageReal(uploadCtx, file, "klinik_hoaks_news")
+	if errUp != nil {
+		slog.Error("admin.upload.failed", slog.String("err", errUp.Error()))
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_FILE_UPLOAD",
+			Message: "Gagal upload gambar admin: " + errUp.Error(),
+		})
+	}
+
 	qtx := h.Queries.WithTx(tx)
 
 	if _, err := qtx.CreateNewsClarification(ctx, db.CreateNewsClarificationParams{
@@ -301,7 +301,7 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 		ReferenceLink: pgtype.Text{String: refLink, Valid: refLink != ""},
 		ImageUrl:      imageUrl,
 	}); err != nil {
-		slog.Error("admin.tx.insert_news_failed", slog.String("err", err.Error()))
+		slog.Warn("admin.tx.insert_news_failed — gambar Cloudinary mungkin orphan", slog.String("imageUrl", imageUrl), slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Gagal menyimpan berita",
@@ -312,7 +312,7 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 		ReportID: pgReportID,
 		Status:   "PROCESSED",
 	}); err != nil {
-		slog.Error("admin.tx.update_status_failed", slog.String("err", err.Error()))
+		slog.Warn("admin.tx.update_status_failed — gambar Cloudinary mungkin orphan", slog.String("imageUrl", imageUrl), slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Gagal memperbarui status laporan",
@@ -320,7 +320,7 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		slog.Error("admin.tx.commit_failed", slog.String("err", err.Error()))
+		slog.Warn("admin.tx.commit_failed — gambar Cloudinary mungkin orphan", slog.String("imageUrl", imageUrl), slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Gagal memfinalisasi transaksi",
