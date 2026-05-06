@@ -1,8 +1,8 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pgcrypto; 
 
--- Master data tarif PKB per jenis plat
 CREATE TABLE tarif_pkb (
-    id                  SERIAL PRIMARY KEY,
+    id                  INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     jenis_plat          VARCHAR(10) NOT NULL,
     label               VARCHAR(50) NOT NULL,
     tarif_pkb_persen    DECIMAL(5,4) NOT NULL,
@@ -13,7 +13,6 @@ CREATE TABLE tarif_pkb (
     CONSTRAINT uq_tarif_plat UNIQUE (jenis_plat)
 );
 
--- Master NJKB (Nilai Jual Kendaraan Bermotor)
 CREATE TABLE master_njkb (
     id              INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     jenis_kendaraan VARCHAR(50)  NOT NULL,
@@ -26,9 +25,9 @@ CREATE TABLE master_njkb (
     CONSTRAINT uq_njkb UNIQUE (merk, tipe, tahun)
 );
 
--- Data pajak kendaraan per plat
 CREATE TABLE kendaraan_pajak (
-    plat_nomor           VARCHAR(15) PRIMARY KEY,
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(), 
+    plat_nomor           VARCHAR(15) NOT NULL UNIQUE,                
     plat_nomor_display   VARCHAR(15) NOT NULL,
     nomor_rangka         VARCHAR(50) NOT NULL,
     status_aktif         BOOLEAN NOT NULL DEFAULT TRUE,
@@ -51,31 +50,15 @@ CREATE TABLE kendaraan_pajak (
     ) STORED
 );
 
--- kendaraan_pajak: trigram untuk LIKE search by plat (admin search feature)
-CREATE INDEX idx_kendaraan_plat_trgm 
-    ON kendaraan_pajak USING GIN (plat_nomor gin_trgm_ops);
+-- INDEXES
+CREATE INDEX idx_kendaraan_plat_trgm ON kendaraan_pajak USING GIN (plat_nomor gin_trgm_ops);
+CREATE INDEX idx_kendaraan_masa_pajak ON kendaraan_pajak(masa_pajak);
+CREATE INDEX idx_kendaraan_created_at_desc ON kendaraan_pajak(created_at DESC);
+CREATE INDEX idx_kendaraan_status_aktif ON kendaraan_pajak(status_aktif) WHERE status_aktif = true;
+CREATE INDEX idx_njkb_full ON master_njkb(jenis_kendaraan, merk, model, tipe, tahun);
+CREATE INDEX IF NOT EXISTS idx_kendaraan_nomor_rangka_right5 ON kendaraan_pajak (RIGHT(nomor_rangka, 5));
 
--- kendaraan_pajak: range query by masa_pajak (reminder jatuh tempo)
-CREATE INDEX idx_kendaraan_masa_pajak 
-    ON kendaraan_pajak(masa_pajak);
-
--- kendaraan_pajak: ORDER BY created_at DESC (admin pagination)
-CREATE INDEX idx_kendaraan_created_at_desc 
-    ON kendaraan_pajak(created_at DESC);
-
--- kendaraan_pajak: partial index — cuma row aktif (efisien, hemat space)
-CREATE INDEX idx_kendaraan_status_aktif 
-    ON kendaraan_pajak(status_aktif) 
-    WHERE status_aktif = true;
-
--- master_njkb: composite index untuk cascading dropdown query
-CREATE INDEX idx_njkb_full 
-    ON master_njkb(jenis_kendaraan, merk, model, tipe, tahun);
-
--- =============================================================================
--- TRIGGERS — auto-update updated_at column
--- =============================================================================
-
+-- TRIGGERS
 CREATE OR REPLACE FUNCTION trg_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

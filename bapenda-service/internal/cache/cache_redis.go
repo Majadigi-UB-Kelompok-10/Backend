@@ -21,17 +21,15 @@ type RedisCache struct {
 	errs   atomic.Uint64
 }
 
-// NewRedisCache — bikin Redis cache dengan tuning pool yang aman buat production
 func NewRedisCache(redisURL string) (*RedisCache, error) {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("gagal parsing redis URL: %w", err)
 	}
 
-	// Tuning pool — penting buat production
-	opt.PoolSize = 50              // max connections
-	opt.MinIdleConns = 5           // pre-warmed connections
-	opt.MaxRetries = 3             // retry transient errors
+	opt.PoolSize = 50              
+	opt.MinIdleConns = 5           
+	opt.MaxRetries = 3             
 	opt.DialTimeout = 5 * time.Second
 	opt.ReadTimeout = 2 * time.Second
 	opt.WriteTimeout = 2 * time.Second
@@ -113,7 +111,7 @@ func (r *RedisCache) Has(key string) bool {
 func (r *RedisCache) Delete(key string) {
 	ctx, cancel := r.opCtx()
 	defer cancel()
-	if err := r.client.Del(ctx, key).Err(); err != nil {
+	if err := r.client.Unlink(ctx, key).Err(); err != nil {
 		r.errs.Add(1)
 		slog.Warn("cache.redis_del_error",
 			slog.String("key", key),
@@ -134,7 +132,6 @@ func (r *RedisCache) Stats() Stats {
 	return Stats{
 		Hits:   r.hits.Load(),
 		Misses: r.misses.Load(),
-		// Size: -1 — bisa diisi via DBSIZE tapi ekspensif, biarin
 	}
 }
 
@@ -176,9 +173,9 @@ func (r *RedisCache) deleteByScan(match string) {
 			return
 		}
 		if len(keys) > 0 {
-			if delErr := r.client.Del(ctx, keys...).Err(); delErr != nil {
+			if delErr := r.client.Unlink(ctx, keys...).Err(); delErr != nil {
 				r.errs.Add(1)
-				slog.Warn("cache.redis_batch_del_error",
+				slog.Warn("cache.redis_batch_unlink_error",
 					slog.String("err", delErr.Error()),
 				)
 			} else {
@@ -191,7 +188,7 @@ func (r *RedisCache) deleteByScan(match string) {
 		}
 	}
 	if totalDeleted > 0 {
-		slog.Debug("cache.redis_batch_delete",
+		slog.Debug("cache.redis_batch_unlink",
 			slog.String("match", match),
 			slog.Int("deleted", totalDeleted),
 		)

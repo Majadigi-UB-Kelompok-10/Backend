@@ -45,7 +45,7 @@ INSERT INTO kendaraan_pajak (
     $8, $9, $10, $11,
     $12, $13, $14,
     $15, $16
-) RETURNING plat_nomor
+) RETURNING id
 `
 
 type CreateKendaraanPajakParams struct {
@@ -67,7 +67,7 @@ type CreateKendaraanPajakParams struct {
 	CetakTnkb          int32       `json:"cetak_tnkb"`
 }
 
-func (q *Queries) CreateKendaraanPajak(ctx context.Context, arg CreateKendaraanPajakParams) (string, error) {
+func (q *Queries) CreateKendaraanPajak(ctx context.Context, arg CreateKendaraanPajakParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, createKendaraanPajak,
 		arg.PlatNomor,
 		arg.PlatNomorDisplay,
@@ -86,9 +86,9 @@ func (q *Queries) CreateKendaraanPajak(ctx context.Context, arg CreateKendaraanP
 		arg.CetakStnk,
 		arg.CetakTnkb,
 	)
-	var plat_nomor string
-	err := row.Scan(&plat_nomor)
-	return plat_nomor, err
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createMasterNjkb = `-- name: CreateMasterNjkb :one
@@ -126,11 +126,13 @@ func (q *Queries) CreateMasterNjkb(ctx context.Context, arg CreateMasterNjkbPara
 }
 
 const deleteKendaraanPajak = `-- name: DeleteKendaraanPajak :exec
-DELETE FROM kendaraan_pajak WHERE plat_nomor = $1
+
+DELETE FROM kendaraan_pajak WHERE id = $1
 `
 
-func (q *Queries) DeleteKendaraanPajak(ctx context.Context, platNomor string) error {
-	_, err := q.db.Exec(ctx, deleteKendaraanPajak, platNomor)
+// WHERE-nya sekarang pakai ID
+func (q *Queries) DeleteKendaraanPajak(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteKendaraanPajak, id)
 	return err
 }
 
@@ -144,7 +146,9 @@ func (q *Queries) DeleteMasterNjkb(ctx context.Context, id int32) error {
 }
 
 const getAllKendaraanPajakAdmin = `-- name: GetAllKendaraanPajakAdmin :many
+
 SELECT 
+    id, -- ID WAJIB DI-SELECT BIAR MUNCUL DI JSON
     plat_nomor, plat_nomor_display, nomor_rangka, merk, tipe, 
     tahun_buat, status_aktif, masa_pajak
 FROM kendaraan_pajak
@@ -158,6 +162,7 @@ type GetAllKendaraanPajakAdminParams struct {
 }
 
 type GetAllKendaraanPajakAdminRow struct {
+	ID               pgtype.UUID `json:"id"`
 	PlatNomor        string      `json:"plat_nomor"`
 	PlatNomorDisplay string      `json:"plat_nomor_display"`
 	NomorRangka      string      `json:"nomor_rangka"`
@@ -168,6 +173,7 @@ type GetAllKendaraanPajakAdminRow struct {
 	MasaPajak        pgtype.Date `json:"masa_pajak"`
 }
 
+// Cari spesifik pakai ID
 func (q *Queries) GetAllKendaraanPajakAdmin(ctx context.Context, arg GetAllKendaraanPajakAdminParams) ([]GetAllKendaraanPajakAdminRow, error) {
 	rows, err := q.db.Query(ctx, getAllKendaraanPajakAdmin, arg.OffsetData, arg.LimitData)
 	if err != nil {
@@ -178,6 +184,7 @@ func (q *Queries) GetAllKendaraanPajakAdmin(ctx context.Context, arg GetAllKenda
 	for rows.Next() {
 		var i GetAllKendaraanPajakAdminRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.PlatNomor,
 			&i.PlatNomorDisplay,
 			&i.NomorRangka,
@@ -490,18 +497,21 @@ func (q *Queries) GetKendaraanByPlatDanRangka(ctx context.Context, arg GetKendar
 	return i, err
 }
 
-const getKendaraanPajakByPlatAdmin = `-- name: GetKendaraanPajakByPlatAdmin :one
+const getKendaraanPajakByIdAdmin = `-- name: GetKendaraanPajakByIdAdmin :one
+
 SELECT 
+    id, -- ID WAJIB DI-SELECT BIAR MUNCUL DI JSON
     plat_nomor, plat_nomor_display, nomor_rangka, status_aktif,
     merk, tipe, warna, tahun_buat, model, masa_pajak,
     pkb_pokok, opsen_pkb, swdkllj, parkir_berlangganan, total_pajak_tahunan,
     cetak_stnk, cetak_tnkb,
     created_at, updated_at
 FROM kendaraan_pajak
-WHERE plat_nomor = $1
+WHERE id = $1
 `
 
-type GetKendaraanPajakByPlatAdminRow struct {
+type GetKendaraanPajakByIdAdminRow struct {
+	ID                 pgtype.UUID        `json:"id"`
 	PlatNomor          string             `json:"plat_nomor"`
 	PlatNomorDisplay   string             `json:"plat_nomor_display"`
 	NomorRangka        string             `json:"nomor_rangka"`
@@ -523,10 +533,12 @@ type GetKendaraanPajakByPlatAdminRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) GetKendaraanPajakByPlatAdmin(ctx context.Context, platNomor string) (GetKendaraanPajakByPlatAdminRow, error) {
-	row := q.db.QueryRow(ctx, getKendaraanPajakByPlatAdmin, platNomor)
-	var i GetKendaraanPajakByPlatAdminRow
+// Hapus pakai ID
+func (q *Queries) GetKendaraanPajakByIdAdmin(ctx context.Context, id pgtype.UUID) (GetKendaraanPajakByIdAdminRow, error) {
+	row := q.db.QueryRow(ctx, getKendaraanPajakByIdAdmin, id)
+	var i GetKendaraanPajakByIdAdminRow
 	err := row.Scan(
+		&i.ID,
 		&i.PlatNomor,
 		&i.PlatNomorDisplay,
 		&i.NomorRangka,
@@ -653,25 +665,30 @@ func (q *Queries) GetNilaiJual(ctx context.Context, arg GetNilaiJualParams) (Get
 }
 
 const updateKendaraanPajak = `-- name: UpdateKendaraanPajak :exec
+
 UPDATE kendaraan_pajak SET
-    nomor_rangka        = $1,
-    status_aktif        = $2,
-    merk                = $3,
-    tipe                = $4,
-    warna               = $5,
-    tahun_buat          = $6,
-    model               = $7,
-    masa_pajak          = $8,
-    pkb_pokok           = $9,
-    opsen_pkb           = $10,
-    swdkllj             = $11,
-    parkir_berlangganan = $12,
-    cetak_stnk          = $13,
-    cetak_tnkb          = $14
-WHERE plat_nomor = $15
+    plat_nomor          = $1,
+    plat_nomor_display  = $2, 
+    nomor_rangka        = $3,
+    status_aktif        = $4,
+    merk                = $5,
+    tipe                = $6,
+    warna               = $7,
+    tahun_buat          = $8,
+    model               = $9,
+    masa_pajak          = $10,
+    pkb_pokok           = $11,
+    opsen_pkb           = $12,
+    swdkllj             = $13,
+    parkir_berlangganan = $14,
+    cetak_stnk          = $15,
+    cetak_tnkb          = $16
+WHERE id = $17
 `
 
 type UpdateKendaraanPajakParams struct {
+	PlatNomor          string      `json:"plat_nomor"`
+	PlatNomorDisplay   string      `json:"plat_nomor_display"`
 	NomorRangka        string      `json:"nomor_rangka"`
 	StatusAktif        bool        `json:"status_aktif"`
 	Merk               string      `json:"merk"`
@@ -686,11 +703,14 @@ type UpdateKendaraanPajakParams struct {
 	ParkirBerlangganan int32       `json:"parkir_berlangganan"`
 	CetakStnk          int32       `json:"cetak_stnk"`
 	CetakTnkb          int32       `json:"cetak_tnkb"`
-	PlatNomorKey       string      `json:"plat_nomor_key"`
+	ID                 pgtype.UUID `json:"id"`
 }
 
+// RETURNING sekarang membalikkan UUID, bukan plat nomor lagi!
 func (q *Queries) UpdateKendaraanPajak(ctx context.Context, arg UpdateKendaraanPajakParams) error {
 	_, err := q.db.Exec(ctx, updateKendaraanPajak,
+		arg.PlatNomor,
+		arg.PlatNomorDisplay,
 		arg.NomorRangka,
 		arg.StatusAktif,
 		arg.Merk,
@@ -705,7 +725,7 @@ func (q *Queries) UpdateKendaraanPajak(ctx context.Context, arg UpdateKendaraanP
 		arg.ParkirBerlangganan,
 		arg.CetakStnk,
 		arg.CetakTnkb,
-		arg.PlatNomorKey,
+		arg.ID,
 	)
 	return err
 }

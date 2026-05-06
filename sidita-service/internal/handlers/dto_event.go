@@ -39,7 +39,7 @@ type EventActionResponse struct {
 }
 
 type EventDetailResponse struct {
-	Event db.GetEventBySlugRow `json:"event"`
+	Event db.GetEventByIDPublicRow `json:"event"`
 }
 
 type EventMapsResponse struct {

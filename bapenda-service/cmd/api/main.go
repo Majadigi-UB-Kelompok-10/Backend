@@ -427,6 +427,7 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 		Format: `{"ts":"${time}","level":"info","msg":"http","method":"${method}","path":"${path}","status":${status},"latency":"${latency}","ip":"${ip}","reqid":"${locals:requestid}","ua":"${ua}"}` + "\n",
 	}))
 
+
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

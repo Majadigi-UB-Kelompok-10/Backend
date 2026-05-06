@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,10 +28,13 @@ func NewHotelHandler(q *db.Queries, cld *cloudinary.Cloudinary) *HotelHandler {
 	return &HotelHandler{Queries: q, Cld: cld}
 }
 
-func invalidateHotelCache() {
+func invalidateHotelCache(id int32) {
 	cache.GlobalCache.DeleteByPrefix("hotel:list:")
 	cache.GlobalCache.DeleteByPrefix("hotel:maps:")
 	cache.GlobalCache.Delete("hotel:recommendation")
+	if id > 0 {
+		cache.GlobalCache.Delete(fmt.Sprintf("hotel:detail:id_%d", id))
+	}
 }
 
 // =============================================================================
@@ -119,6 +124,45 @@ func (h *HotelHandler) ListHotel(c fiber.Ctx) error {
 }
 
 // =============================================================================
+// PUBLIC: GET DETAIL by ID
+// =============================================================================
+
+func (h *HotelHandler) GetHotelByIDPublic(c fiber.Ctx) error {
+	idParam := c.Params("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code:    "ERR_VALIDATION",
+			Message: "ID hotel tidak valid, harus berupa angka",
+		})
+	}
+
+	cacheKey := fmt.Sprintf("hotel:detail:id_%d", id)
+	if respondCached(c, cacheKey) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetHotelByIDPublic(ctx, int32(id))
+	if err != nil {
+		slog.Warn("public.hotel.not_found", slog.Int("id", id))
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code:    "ERR_NOT_FOUND",
+			Message: "Hotel tidak ditemukan",
+		})
+	}
+
+	res := SuccessResponse{
+		Pesan: "Detail Hotel",
+		Data:  data,
+	}
+	
+	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
+}
+
+// =============================================================================
 // PUBLIC: GET HOTEL MAPS
 // =============================================================================
 
@@ -127,8 +171,12 @@ func (h *HotelHandler) GetHotelMaps(c fiber.Ctx) error {
 	if errArea != nil {
 		return validationErrorResponse(c, errArea)
 	}
+	keyword, errKw := utils.ValidateQueryString(c.Query("search"), 100, "search")
+	if errKw != nil {
+		return validationErrorResponse(c, errKw)
+	}
 
-	cacheKey := "hotel:maps:area_" + normalizeKey(areaName)
+	cacheKey := fmt.Sprintf("hotel:maps:area_%s:keyword_%s", normalizeKey(areaName), normalizeKey(keyword))
 	if respondCached(c, cacheKey) {
 		return nil
 	}
@@ -137,8 +185,8 @@ func (h *HotelHandler) GetHotelMaps(c fiber.Ctx) error {
 	defer cancel()
 
 	center := MapsCenter{Lat: "-7.697739", Lng: "112.493863", Zoom: 8}
-
 	var areaIDArg pgtype.Int4
+
 	if areaName != "" {
 		area, err := h.Queries.GetAreaByName(ctx, areaName)
 		if err == nil {
@@ -149,13 +197,27 @@ func (h *HotelHandler) GetHotelMaps(c fiber.Ctx) error {
 		}
 	}
 
-	data, err := h.Queries.ListHotelMaps(ctx, areaIDArg)
+	var keywordArg pgtype.Text
+	if keyword != "" {
+		keywordArg = pgtype.Text{String: keyword, Valid: true}
+	}
+
+	data, err := h.Queries.ListHotelMaps(ctx, db.ListHotelMapsParams{
+		AreaID:  areaIDArg,
+		Keyword: keywordArg,
+	})
 	if err != nil {
 		slog.Error("public.hotel.maps_error", slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Code:    "ERR_INTERNAL_DB",
 			Message: "Gagal mengambil data peta hotel",
 		})
+	}
+
+	if len(data) == 1 && areaName == "" {
+		center.Lat = data[0].Lat
+		center.Lng = data[0].Lng
+		center.Zoom = 13
 	}
 
 	if data == nil {
@@ -200,31 +262,31 @@ func (h *HotelHandler) GetRecommendationHotel(c fiber.Ctx) error {
 }
 
 // =============================================================================
-// ADMIN: GET DETAIL by ID
+// ADMIN: GET DETAIL 
 // =============================================================================
 
-func (h *HotelHandler) GetHotelByID(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code:    "ERR_VALIDATION",
-			Message: "ID hotel tidak valid",
-		})
-	}
+func (h *HotelHandler) GetHotelBySlugAdmin(c fiber.Ctx) error {
+    slugParam := c.Params("slug")
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code:    "ERR_VALIDATION",
+            Message: "Slug hotel tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+    defer cancel()
 
-	data, err := h.Queries.GetHotelByID(ctx, int32(id))
-	if err != nil {
-		slog.Warn("admin.hotel.not_found", slog.Int("id", id))
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code:    "ERR_NOT_FOUND",
-			Message: "Hotel tidak ditemukan",
-		})
-	}
+    data, err := h.Queries.GetHotelBySlugAdmin(ctx, slugParam)
+    if err != nil {
+        slog.Warn("admin.hotel.not_found", slog.String("slug", slugParam))
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code:    "ERR_NOT_FOUND",
+            Message: "Hotel tidak ditemukan",
+        })
+    }
 
-	return c.JSON(SuccessResponse{Pesan: "Detail Hotel", Data: data})
+    return c.JSON(SuccessResponse{Pesan: "Detail Hotel", Data: data})
 }
 
 // =============================================================================
@@ -292,6 +354,23 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 		})
 	}
 
+	exists, errCheck := h.Queries.CheckHotelNamaExists(ctx, nama)
+	if errCheck != nil {
+		slog.Error("admin.hotel.nama_check_error", slog.String("err", errCheck.Error()))
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code:    "ERR_INTERNAL_DB",
+			Message: "Gagal memvalidasi nama hotel",
+		})
+	}
+	if exists {
+		return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+			Code:    "ERR_CONFLICT",
+			Message: "Hotel dengan nama ini sudah ada",
+		})
+	}
+
+	slugBaru := utils.GenerateSlug(nama)
+
 	fileHeader, errFile := c.FormFile("gambar")
 	if errFile != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -311,8 +390,6 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 		})
 	}
 
-	slugBaru := utils.GenerateSlug(nama)
-
 	idBaru, errDb := h.Queries.CreateHotel(ctx, db.CreateHotelParams{
 		AreaID:        area.ID,
 		Nama:          nama,
@@ -329,7 +406,8 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 	if errDb != nil {
 		destroyImageAsync(h.Cld, gambarPubID)
 
-		if strings.Contains(errDb.Error(), "duplicate key") {
+		var pgErr *pgconn.PgError
+		if errors.As(errDb, &pgErr) && pgErr.Code == "23505" {
 			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
 				Code:    "ERR_CONFLICT",
 				Message: "Hotel dengan nama atau slug ini sudah ada",
@@ -342,7 +420,7 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 		})
 	}
 
-	invalidateHotelCache()
+	invalidateHotelCache(idBaru.ID)
 	slog.Info("admin.hotel.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
@@ -366,129 +444,166 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *HotelHandler) UpdateHotel(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "ID hotel tidak valid",
-		})
-	}
+    slugParam := c.Params("slug")
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Slug hotel tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+    defer cancel()
 
-	old, errCari := h.Queries.GetHotelByID(ctx, int32(id))
-	if errCari != nil {
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Hotel tidak ditemukan",
-		})
-	}
+    old, errCari := h.Queries.GetHotelBySlugAdmin(ctx, slugParam)
+    if errCari != nil {
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Hotel tidak ditemukan",
+        })
+    }
 
-	finalAreaID := old.AreaID
-	finalNama := old.Nama
-	finalSlug := old.Slug
-	finalBintang := old.Bintang
-	finalHarga := old.HargaMulai
-	finalDeskripsi := old.Deskripsi
-	finalAlamat := old.Alamat
-	finalHighlight := old.HighlightText
-	finalLat := old.Lat
-	finalLng := old.Lng
-	finalGambar := old.GambarUrl
+    finalAreaID := old.AreaID
+    finalNama := old.Nama
+    finalSlug := old.Slug
+    finalBintang := old.Bintang
+    finalHarga := old.HargaMulai
+    finalDeskripsi := old.Deskripsi
+    finalAlamat := old.Alamat
+    finalHighlight := old.HighlightText
+    finalLat := old.Lat
+    finalLng := old.Lng
+    finalGambar := old.GambarUrl
 
-	if v := strings.TrimSpace(c.FormValue("area")); v != "" {
-		area, errArea := h.Queries.GetAreaByName(ctx, v)
-		if errArea != nil {
-			return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-				Code: "ERR_NOT_FOUND", Message: "Area '" + v + "' tidak ditemukan",
-			})
-		}
-		finalAreaID = area.ID
-	}
-	if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
-		finalNama = v
-		finalSlug = utils.GenerateSlug(v)
-	}
-	if v := strings.TrimSpace(c.FormValue("bintang")); v != "" {
-		if b, err := strconv.Atoi(v); err == nil && b >= 1 && b <= 5 {
-			finalBintang = int16(b)
-		}
-	}
-	if v := strings.TrimSpace(c.FormValue("harga_mulai")); v != "" {
-		if hg, err := strconv.Atoi(v); err == nil && hg >= 0 {
-			finalHarga = int32(hg)
-		}
-	}
-	if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
-		finalDeskripsi = pgtype.Text{String: v, Valid: true}
-	}
-	if v := strings.TrimSpace(c.FormValue("alamat")); v != "" {
-		finalAlamat = v
-	}
-	if v := strings.TrimSpace(c.FormValue("highlight_text")); v != "" {
-		finalHighlight = pgtype.Text{String: v, Valid: true}
-	}
-	if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
-		_ = finalLat.Scan(v)
-	}
-	if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
-		_ = finalLng.Scan(v)
-	}
+    if v := strings.TrimSpace(c.FormValue("area")); v != "" {
+        area, errArea := h.Queries.GetAreaByName(ctx, v)
+        if errArea != nil {
+            return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+                Code: "ERR_NOT_FOUND", Message: "Area '" + v + "' tidak ditemukan",
+            })
+        }
+        finalAreaID = area.ID
+    }
+    if v := strings.TrimSpace(c.FormValue("nama")); v != "" {
+        finalNama = v
+        finalSlug = utils.GenerateSlug(v)
+    }
+    if v := strings.TrimSpace(c.FormValue("bintang")); v != "" {
+        b, err := strconv.Atoi(v)
+        if err != nil || b < 1 || b > 5 {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Bintang harus berupa angka 1-5",
+            })
+        }
+        finalBintang = int16(b)
+    }
+    if v := strings.TrimSpace(c.FormValue("harga_mulai")); v != "" {
+        hg, err := strconv.Atoi(v)
+        if err != nil || hg < 0 {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Harga mulai harus berupa angka non-negatif",
+            })
+        }
+        finalHarga = int32(hg)
+    }
+    if v := strings.TrimSpace(c.FormValue("deskripsi")); v != "" {
+        finalDeskripsi = pgtype.Text{String: v, Valid: true}
+    }
+    if v := strings.TrimSpace(c.FormValue("alamat")); v != "" {
+        finalAlamat = v
+    }
+    if v := strings.TrimSpace(c.FormValue("highlight_text")); v != "" {
+        finalHighlight = pgtype.Text{String: v, Valid: true}
+    }
+    if v := strings.TrimSpace(c.FormValue("lat")); v != "" {
+        if err := finalLat.Scan(v); err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format latitude tidak valid",
+            })
+        }
+    }
+    if v := strings.TrimSpace(c.FormValue("lng")); v != "" {
+        if err := finalLng.Scan(v); err != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code: "ERR_VALIDATION", Message: "Format longitude tidak valid",
+            })
+        }
+    }
 
-	uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
-	defer cancelUpload()
+    if finalNama != old.Nama {
+        exists, errCheck := h.Queries.CheckHotelNamaExistsExcluding(ctx, db.CheckHotelNamaExistsExcludingParams{
+            Nama:    finalNama,
+            OldSlug: old.Slug,
+        })
+        if errCheck != nil {
+            slog.Error("admin.hotel.nama_check_error", slog.String("err", errCheck.Error()))
+            return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+                Code:    "ERR_INTERNAL_DB",
+                Message: "Gagal memvalidasi nama hotel",
+            })
+        }
+        if exists {
+            return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+                Code:    "ERR_CONFLICT",
+                Message: "Hotel dengan nama ini sudah ada",
+            })
+        }
+    }
 
-	var newPubID, oldToDelete string
-	if fileHeader, errFile := c.FormFile("gambar"); errFile == nil {
-		url, pubID, errUp := uploadImage(uploadCtx, h.Cld, fileHeader, "sidita_hotel")
-		if errUp != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-				Code:    "ERR_FILE_UPLOAD",
-				Message: "Gagal upload gambar: " + errUp.Error(),
-			})
-		}
-		newPubID = pubID
-		oldToDelete = utils.ExtractPublicID(old.GambarUrl)
-		finalGambar = url
-	}
+    uploadCtx, cancelUpload := context.WithTimeout(context.Background(), ContextUploadTimeout)
+    defer cancelUpload()
 
-	if err := h.Queries.UpdateHotel(ctx, db.UpdateHotelParams{
-		ID:            old.ID,
-		AreaID:        finalAreaID,
-		Nama:          finalNama,
-		Slug:          finalSlug,
-		Bintang:       finalBintang,
-		HargaMulai:    finalHarga,
-		Deskripsi:     finalDeskripsi,
-		Alamat:        finalAlamat,
-		HighlightText: finalHighlight,
-		GambarUrl:     finalGambar,
-		Lat:           finalLat,
-		Lng:           finalLng,
-	}); err != nil {
-		destroyImageAsync(h.Cld, newPubID)
+    var newPubID, oldToDelete string
+    if fileHeader, errFile := c.FormFile("gambar"); errFile == nil {
+        url, pubID, errUp := uploadImage(uploadCtx, h.Cld, fileHeader, "sidita_hotel")
+        if errUp != nil {
+            return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+                Code:    "ERR_FILE_UPLOAD",
+                Message: "Gagal upload gambar: " + errUp.Error(),
+            })
+        }
+        newPubID = pubID
+        oldToDelete = utils.ExtractPublicID(old.GambarUrl)
+        finalGambar = url
+    }
 
-		if strings.Contains(err.Error(), "duplicate key") {
-			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
-				Code:    "ERR_CONFLICT",
-				Message: "Hotel dengan nama atau slug ini sudah ada",
-			})
-		}
-		slog.Error("admin.hotel.update_error", slog.String("err", err.Error()))
-		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-			Code:    "ERR_INTERNAL_DB",
-			Message: "Gagal mengupdate hotel",
-		})
-	}
+    if err := h.Queries.UpdateHotel(ctx, db.UpdateHotelParams{
+        AreaID:        finalAreaID,
+        Nama:          finalNama,
+        SlugBaru:      finalSlug,
+        SlugLama:      old.Slug,
+        Bintang:       finalBintang,
+        HargaMulai:    finalHarga,
+        Deskripsi:     finalDeskripsi,
+        Alamat:        finalAlamat,
+        HighlightText: finalHighlight,
+        GambarUrl:     finalGambar,
+        Lat:           finalLat,
+        Lng:           finalLng,
+    }); err != nil {
+        destroyImageAsync(h.Cld, newPubID)
 
-	destroyImageAsync(h.Cld, oldToDelete)
+        var pgErr *pgconn.PgError
+        if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+            return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+                Code:    "ERR_CONFLICT",
+                Message: "Hotel dengan nama atau slug ini sudah ada",
+            })
+        }
+        slog.Error("admin.hotel.update_error", slog.String("err", err.Error()))
+        return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+            Code:    "ERR_INTERNAL_DB",
+            Message: "Gagal mengupdate hotel",
+        })
+    }
 
-	invalidateHotelCache()
-	slog.Info("admin.hotel.updated", slog.Int("id", id), slog.String("slug", finalSlug))
+    destroyImageAsync(h.Cld, oldToDelete)
 
-	return c.JSON(SuccessResponse{
-		Pesan: "Hotel berhasil diupdate",
-		Data:  HotelActionResponse{ID: old.ID, Nama: finalNama, Slug: finalSlug, GambarUrl: finalGambar},
-	})
+    invalidateHotelCache(old.ID)
+    slog.Info("admin.hotel.updated", slog.Int("id", int(old.ID)), slog.String("slug", finalSlug))
+
+    return c.JSON(SuccessResponse{
+        Pesan: "Hotel berhasil diupdate",
+        Data:  HotelActionResponse{ID: old.ID, Nama: finalNama, Slug: finalSlug, GambarUrl: finalGambar},
+    })
 }
 
 // =============================================================================
@@ -496,36 +611,36 @@ func (h *HotelHandler) UpdateHotel(c fiber.Ctx) error {
 // =============================================================================
 
 func (h *HotelHandler) DeleteHotel(c fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
-			Code: "ERR_VALIDATION", Message: "ID hotel tidak valid",
-		})
-	}
+    slugParam := c.Params("slug")
+    if slugParam == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+            Code: "ERR_VALIDATION", Message: "Slug hotel tidak valid",
+        })
+    }
 
-	ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), ContextDBTimeout)
+    defer cancel()
 
-	old, errCari := h.Queries.GetHotelByID(ctx, int32(id))
-	if errCari != nil {
-		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
-			Code: "ERR_NOT_FOUND", Message: "Hotel tidak ditemukan",
-		})
-	}
+    old, errCari := h.Queries.GetHotelBySlugAdmin(ctx, slugParam)
+    if errCari != nil {
+        return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+            Code: "ERR_NOT_FOUND", Message: "Hotel tidak ditemukan",
+        })
+    }
 
-	if err := h.Queries.DeleteHotel(ctx, old.ID); err != nil {
-		slog.Error("admin.hotel.delete_error", slog.String("err", err.Error()))
-		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-			Code: "ERR_INTERNAL_DB", Message: "Gagal menghapus hotel",
-		})
-	}
+    if err := h.Queries.DeleteHotel(ctx, old.Slug); err != nil {
+        slog.Error("admin.hotel.delete_error", slog.String("err", err.Error()))
+        return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+            Code: "ERR_INTERNAL_DB", Message: "Gagal menghapus hotel",
+        })
+    }
 
-	destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrl))
+    destroyImageAsync(h.Cld, utils.ExtractPublicID(old.GambarUrl))
 
-	invalidateHotelCache()
-	slog.Info("admin.hotel.deleted", slog.Int("id", id), slog.String("slug", old.Slug))
+    invalidateHotelCache(old.ID)
+    slog.Info("admin.hotel.deleted", slog.Int("id", int(old.ID)), slog.String("slug", old.Slug))
 
-	return c.JSON(SuccessResponse{Pesan: "Hotel berhasil dihapus"})
+    return c.JSON(SuccessResponse{Pesan: "Hotel berhasil dihapus"})
 }
 
 // =============================================================================

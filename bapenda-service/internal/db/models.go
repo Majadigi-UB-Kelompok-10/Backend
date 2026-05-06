@@ -9,6 +9,7 @@ import (
 )
 
 type KendaraanPajak struct {
+	ID                 pgtype.UUID        `json:"id"`
 	PlatNomor          string             `json:"plat_nomor"`
 	PlatNomorDisplay   string             `json:"plat_nomor_display"`
 	NomorRangka        string             `json:"nomor_rangka"`

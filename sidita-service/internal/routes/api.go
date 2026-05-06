@@ -63,17 +63,18 @@ func SetupRoutes(
 	public.Get("/destinasi", searchLimiter, destinasiHandler.ListDestinasi)
 	public.Get("/destinasi/maps", destinasiHandler.GetDestinasiMaps)
 	public.Get("/destinasi/recommendation", destinasiHandler.GetRecommendationDestinasi)
-	public.Get("/destinasi/:slug", destinasiHandler.GetDetailDestinasi)
+	public.Get("/destinasi/:id", destinasiHandler.GetDetailDestinasi)
 
 	public.Get("/hotel", searchLimiter, hotelHandler.ListHotel)
 	public.Get("/hotel/maps", hotelHandler.GetHotelMaps)
 	public.Get("/hotel/recommendation", hotelHandler.GetRecommendationHotel)
+	public.Get("/hotel/:id", hotelHandler.GetHotelByIDPublic)
 
 	public.Get("/event", searchLimiter, eventHandler.ListEvent)
 	public.Get("/event/maps", eventHandler.GetEventMaps)
 	public.Get("/event/recommendation", eventHandler.GetRecommendationEvent)
 	public.Get("/event/tahun-tersedia", eventHandler.GetTahunTersedia)
-	public.Get("/event/:slug", eventHandler.GetDetailEvent)
+	public.Get("/event/:id", eventHandler.GetDetailEvent)
 
 	// =========================================================================
 	// ADMIN GROUP — web admin (write + read full fields)
@@ -81,18 +82,18 @@ func SetupRoutes(
 
 	admin := api.Group("/admin")
 
-	admin.Get("/destinasi/:id", destinasiHandler.GetDestinasiByID)
-	admin.Post("/destinasi", strictLimiter, destinasiHandler.CreateDestinasi)
-	admin.Put("/destinasi/:id", strictLimiter, destinasiHandler.UpdateDestinasi)
-	admin.Delete("/destinasi/:id", strictLimiter, destinasiHandler.DeleteDestinasi)
+    admin.Get("/destinasi/:slug", destinasiHandler.GetDestinasiBySlugAdmin)
+    admin.Post("/destinasi", strictLimiter, destinasiHandler.CreateDestinasi)
+    admin.Put("/destinasi/:slug", strictLimiter, destinasiHandler.UpdateDestinasi)
+    admin.Delete("/destinasi/:slug", strictLimiter, destinasiHandler.DeleteDestinasi)
 
-	admin.Get("/hotel/:id", hotelHandler.GetHotelByID)
-	admin.Post("/hotel", strictLimiter, hotelHandler.CreateHotel)
-	admin.Put("/hotel/:id", strictLimiter, hotelHandler.UpdateHotel)
-	admin.Delete("/hotel/:id", strictLimiter, hotelHandler.DeleteHotel)
+    admin.Get("/hotel/:slug", hotelHandler.GetHotelBySlugAdmin)
+    admin.Post("/hotel", strictLimiter, hotelHandler.CreateHotel)
+    admin.Put("/hotel/:slug", strictLimiter, hotelHandler.UpdateHotel)
+    admin.Delete("/hotel/:slug", strictLimiter, hotelHandler.DeleteHotel)
 
-	admin.Get("/event/:id", eventHandler.GetEventByID)
-	admin.Post("/event", strictLimiter, eventHandler.CreateEvent)
-	admin.Put("/event/:id", strictLimiter, eventHandler.UpdateEvent)
-	admin.Delete("/event/:id", strictLimiter, eventHandler.DeleteEvent)
+    admin.Get("/event/:slug", eventHandler.GetEventBySlugAdmin)
+    admin.Post("/event", strictLimiter, eventHandler.CreateEvent)
+    admin.Put("/event/:slug", strictLimiter, eventHandler.UpdateEvent)
+    admin.Delete("/event/:slug", strictLimiter, eventHandler.DeleteEvent)
 }

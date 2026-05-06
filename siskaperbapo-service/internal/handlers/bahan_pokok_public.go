@@ -105,24 +105,26 @@ func (h *SiskaperbapoHandler) GetAllBahanPokok(c fiber.Ctx) error {
 	}
 
 	historyMap := buildHistoryMap(riwayatData)
-	var finalData []map[string]interface{}
-	for _, bp := range bahanData {
-		prices := historyMap[bp.ID]
-		harga, tren := calculateTrend(prices)
-		finalData = append(finalData, map[string]interface{}{
-			"id":             bp.ID,
-			"komoditas":      bp.Nama,
-			"slug":           bp.Slug,
-			"satuan":         bp.Satuan,
-			"gambar_url":     bp.GambarUrl.String,
-			"harga_sekarang": harga,
-			"tren":           tren,
-		})
-	}
+	var finalData []BahanPokokItemResponse
+    
+    for _, bp := range bahanData {
+        prices := historyMap[bp.ID]
+        harga, tren := calculateTrend(prices)
+        
+        finalData = append(finalData, BahanPokokItemResponse{
+            ID:            bp.ID,
+            Nama:     	   bp.Nama,
+            Slug:          bp.Slug,
+            Satuan:        bp.Satuan,
+            GambarUrl:     bp.GambarUrl.String,
+            HargaSekarang: harga,
+            Tren:          tren,
+        })
+    }
 
-	if finalData == nil {
-		finalData = []map[string]interface{}{}
-	}
+    if finalData == nil {
+        finalData = []BahanPokokItemResponse{}
+    }
 
 	res := SuccessResponse{
 		Pesan:      "Daftar Komoditas",
@@ -231,83 +233,88 @@ func (h *SiskaperbapoHandler) GetDetailBahanPokok(c fiber.Ctx) error {
 		})
 	}
 
-	var hargaUtama int32 = 0
-	var totalHarga int32 = 0
-	var finalKabKota []map[string]interface{}
+var hargaUtama int32 = 0
+    var totalHarga int32 = 0
+    var finalKabKota []AreaHargaItem 
 
-	for _, item := range daftarRes {
-		totalHarga += item.Harga
-		if item.AreaSlug == areaSlugPilihan {
-			hargaUtama = item.Harga
-		}
-		finalKabKota = append(finalKabKota, map[string]interface{}{
-			"area":      item.Area,
-			"area_slug": item.AreaSlug,
-			"harga":     item.Harga,
-		})
-	}
+    for _, item := range daftarRes {
+        totalHarga += item.Harga
+        if item.AreaSlug == areaSlugPilihan {
+            hargaUtama = item.Harga
+        }
+        finalKabKota = append(finalKabKota, AreaHargaItem{
+            Area:     item.Area,
+            AreaSlug: item.AreaSlug,
+            Harga:    item.Harga,
+        })
+    }
 
-	if hargaUtama == 0 && len(daftarRes) > 0 {
-		hargaUtama = totalHarga / int32(len(daftarRes))
-	}
+    if hargaUtama == 0 && len(daftarRes) > 0 {
+        hargaUtama = totalHarga / int32(len(daftarRes))
+    }
 
-	var finalGrafik []map[string]interface{}
-	prices := make([]int32, 0, len(grafikRes))
-	
-	for _, item := range grafikRes {
-		finalGrafik = append(finalGrafik, map[string]interface{}{
-			"tanggal":         item.Tanggal.Time.Format("2006-01-02"),
-			"rata_rata_harga": item.RataRataHarga,
-		})
-		prices = append(prices, item.RataRataHarga)
-	}
+    var finalGrafik []RiwayatHargaResponse
+    prices := make([]int32, 0, len(grafikRes))
+    
+    for _, item := range grafikRes {
+        finalGrafik = append(finalGrafik, RiwayatHargaResponse{
+            Tanggal:       item.Tanggal.Time.Format("2006-01-02"),
+            RataRataHarga: item.RataRataHarga,
+        })
+        prices = append(prices, item.RataRataHarga)
+    }
 
-	_, tren := calculateTrend(prices)
+    _, tren := calculateTrend(prices)
 
-	var statTertinggi, statTerendah interface{}
-	if len(rataRes) > 0 {
-		dataTertinggi := rataRes[0]
-		dataTerendah := rataRes[len(rataRes)-1]
-		statTertinggi = map[string]interface{}{
-			"area": dataTertinggi.Area, "area_slug": dataTertinggi.AreaSlug, "harga": dataTertinggi.RataRata15Hari,
-		}
-		statTerendah = map[string]interface{}{
-			"area": dataTerendah.Area, "area_slug": dataTerendah.AreaSlug, "harga": dataTerendah.RataRata15Hari,
-		}
-	}
+    var statTertinggi, statTerendah *AreaHargaItem
+    if len(rataRes) > 0 {
+        dataTertinggi := rataRes[0]
+        dataTerendah := rataRes[len(rataRes)-1]
+        
+        statTertinggi = &AreaHargaItem{
+            Area:     dataTertinggi.Area,
+            AreaSlug: dataTertinggi.AreaSlug,
+            Harga:    dataTertinggi.RataRata15Hari,
+        }
+        statTerendah = &AreaHargaItem{
+            Area:     dataTerendah.Area,
+            AreaSlug: dataTerendah.AreaSlug,
+            Harga:    dataTerendah.RataRata15Hari,
+        }
+    }
 
-	if finalGrafik == nil {
-		finalGrafik = []map[string]interface{}{}
-	}
-	if finalKabKota == nil {
-		finalKabKota = []map[string]interface{}{}
-	}
+    if finalGrafik == nil {
+        finalGrafik = []RiwayatHargaResponse{}
+    }
+    if finalKabKota == nil {
+        finalKabKota = []AreaHargaItem{}
+    }
 
-	response := map[string]interface{}{
-		"id":                  bahanPokok.ID,
-		"komoditas":           bahanPokok.Nama,
-		"slug":                bahanPokok.Slug,
-		"satuan":              bahanPokok.Satuan,
-		"gambar_url":          bahanPokok.GambarUrl.String,
-		"tanggal":             tanggalReqStr,
-		"tanggal_data_aktual": tanggalTerakhir.Time.Format("2006-01-02"),
-		"area_pilihan":        areaSlugPilihan,
-		"harga_utama":         hargaUtama,
-		"tren":                tren,
-		"grafik_riwayat":      finalGrafik,
-		"list_kab_kota":       finalKabKota,
-		"statistik_15_hari": map[string]interface{}{
-			"tertinggi": statTertinggi,
-			"terendah":  statTerendah,
-		},
-	}
+    response := DetailBahanPokokResponse{
+        ID:                bahanPokok.ID,
+        Komoditas:         bahanPokok.Nama,
+        Slug:              bahanPokok.Slug,
+        Satuan:            bahanPokok.Satuan,
+        GambarUrl:         bahanPokok.GambarUrl.String,
+        Tanggal:           tanggalReqStr,
+        TanggalDataAktual: tanggalTerakhir.Time.Format("2006-01-02"),
+        AreaPilihan:       areaSlugPilihan,
+        HargaUtama:        hargaUtama,
+        Tren:              tren,
+        GrafikRiwayat:     finalGrafik,
+        ListKabKota:       finalKabKota,
+        Statistik15Hari: Statistik15Hari{
+            Tertinggi: statTertinggi,
+            Terendah:  statTerendah,
+        },
+    }
 
-	res := SuccessResponse{
-		Pesan: "Detail Komoditas",
-		Data:  response,
-	}
-	
-	return cacheJSON(c, cacheKey, CacheTTLBahan, res)
+    res := SuccessResponse{
+        Pesan: "Detail Komoditas",
+        Data:  response,
+    }
+    
+    return cacheJSON(c, cacheKey, CacheTTLBahan, res)
 }
 
 // =====================================================================

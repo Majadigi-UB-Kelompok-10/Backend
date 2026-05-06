@@ -22,7 +22,7 @@ WHERE nama = $1
 LIMIT 1;
 
 -- =============================================================================
--- PUBLIC: DESTINASI — list, detail, maps, recommendation
+-- PUBLIC / MOBILE: DESTINASI
 -- =============================================================================
 
 -- name: ListDestinasi :many
@@ -45,55 +45,47 @@ WHERE
     (sqlc.narg('area_id')::int IS NULL OR d.area_id = sqlc.narg('area_id')::int)
     AND (sqlc.narg('keyword')::text IS NULL OR d.nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
 
--- name: GetDestinasiBySlug :one
+-- name: ListDestinasiMaps :many
+SELECT id, nama, slug, kategori, gambar_url_thumbnail, lat, lng
+FROM destinasi
+WHERE
+    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int)
+    AND (sqlc.narg('keyword')::text IS NULL OR nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
+
+-- name: GetRecommendationDestinasi :many
+SELECT
+    d.id, 
+    d.nama, 
+    d.gambar_url_thumbnail,
+    d.alamat, 
+    a.nama AS area_nama
+FROM destinasi d
+JOIN master_area a ON d.area_id = a.id
+ORDER BY RANDOM()
+LIMIT 6;
+
+-- name: GetDestinasiByIDPublic :one
 SELECT
     d.id, d.nama, d.slug, d.kategori, d.deskripsi, d.alamat, d.highlight_text,
     d.gambar_url_hero, d.lat, d.lng, d.created_at,
     a.id AS area_id, a.nama AS area_nama, a.slug AS area_slug
 FROM destinasi d
 JOIN master_area a ON d.area_id = a.id
-WHERE d.slug = $1
+WHERE d.id = $1
 LIMIT 1;
 
--- name: GetDestinasiByID :one
+-- =============================================================================
+-- ADMIN: DESTINASI 
+-- =============================================================================
+
+-- name: GetDestinasiBySlugAdmin :one
 SELECT
     d.id, d.area_id, d.nama, d.slug, d.kategori, d.deskripsi, d.alamat,
     d.highlight_text, d.gambar_url_thumbnail, d.gambar_url_hero,
     d.lat, d.lng, d.created_at, d.updated_at
 FROM destinasi d
-WHERE d.id = $1
+WHERE d.slug = $1
 LIMIT 1;
-
--- name: ListDestinasiMaps :many
-SELECT id, nama, slug, kategori, gambar_url_thumbnail, lat, lng
-FROM destinasi
-WHERE
-    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int);
-
--- name: GetRecommendationDestinasi :many
-SELECT
-    d.id, d.nama, d.slug, d.kategori, d.highlight_text,
-    d.gambar_url_thumbnail, d.lat, d.lng,
-    a.nama AS area_nama
-FROM destinasi d
-JOIN master_area a ON d.area_id = a.id
-ORDER BY d.created_at DESC
-LIMIT 6;
-
--- name: GetDestinasiByIDPublic :one
--- Mobile app pake ini (lebih efisien dari slug lookup).
-SELECT
-    d.id, d.nama, d.slug, d.kategori, d.deskripsi, d.alamat, d.highlight_text,
-    d.gambar_url_hero, d.lat, d.lng, d.created_at,
-    a.id AS area_id, a.nama AS area_nama, a.slug AS area_slug
-FROM destinasi d
-JOIN master_area a ON d.area_id = a.id
-WHERE d.id = $1
-LIMIT 1;
-
--- =============================================================================
--- ADMIN: DESTINASI — CRUD
--- =============================================================================
 
 -- name: CreateDestinasi :one
 INSERT INTO destinasi (
@@ -110,7 +102,7 @@ INSERT INTO destinasi (
 UPDATE destinasi SET
     area_id              = sqlc.arg('area_id'),
     nama                 = sqlc.arg('nama'),
-    slug                 = sqlc.arg('slug'),
+    slug                 = sqlc.arg('slug_baru'),
     kategori             = sqlc.arg('kategori'),
     deskripsi            = sqlc.arg('deskripsi'),
     alamat               = sqlc.arg('alamat'),
@@ -119,13 +111,19 @@ UPDATE destinasi SET
     gambar_url_hero      = sqlc.arg('gambar_url_hero'),
     lat                  = sqlc.arg('lat'),
     lng                  = sqlc.arg('lng')
-WHERE id = sqlc.arg('id');
+WHERE slug = sqlc.arg('slug_lama'); 
 
 -- name: DeleteDestinasi :exec
-DELETE FROM destinasi WHERE id = $1;
+DELETE FROM destinasi WHERE slug = $1;
+
+-- name: CheckDestinasiNamaExists :one
+SELECT EXISTS(SELECT 1 FROM destinasi WHERE LOWER(nama) = LOWER($1)) AS "exists";
+
+-- name: CheckDestinasiNamaExistsExcluding :one
+SELECT EXISTS(SELECT 1 FROM destinasi WHERE LOWER(nama) = LOWER($1) AND slug != $2) AS "exists";
 
 -- =============================================================================
--- PUBLIC: HOTEL — list, maps, recommendation (NO detail by slug)
+-- PUBLIC: HOTEL 
 -- =============================================================================
 
 -- name: ListHotel :many
@@ -148,7 +146,23 @@ WHERE
     (sqlc.narg('area_id')::int IS NULL OR h.area_id = sqlc.narg('area_id')::int)
     AND (sqlc.narg('keyword')::text IS NULL OR h.nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
 
--- name: GetHotelByID :one
+-- name: ListHotelMaps :many
+SELECT id, nama, slug, bintang, gambar_url, lat, lng
+FROM hotel
+WHERE
+    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int)
+    AND (sqlc.narg('keyword')::text IS NULL OR nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
+
+-- name: GetRecommendationHotel :many
+SELECT
+    h.id, h.nama, h.bintang, h.alamat, h.gambar_url,
+    a.nama AS area_nama
+FROM hotel h
+JOIN master_area a ON h.area_id = a.id
+ORDER BY RANDOM()
+LIMIT 6;
+
+-- name: GetHotelByIDPublic :one
 SELECT
     h.id, h.area_id, h.nama, h.slug, h.bintang, h.harga_mulai,
     h.deskripsi, h.alamat, h.highlight_text, h.gambar_url,
@@ -157,25 +171,18 @@ FROM hotel h
 WHERE h.id = $1
 LIMIT 1;
 
--- name: ListHotelMaps :many
-SELECT id, nama, slug, bintang, gambar_url, lat, lng
-FROM hotel
-WHERE
-    (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int);
+-- =============================================================================
+-- ADMIN: HOTEL 
+-- =============================================================================
 
--- name: GetRecommendationHotel :many
+-- name: GetHotelBySlugAdmin :one
 SELECT
-    h.id, h.nama, h.slug, h.bintang, h.harga_mulai, h.highlight_text,
-    h.gambar_url, h.lat, h.lng,
-    a.nama AS area_nama
+    h.id, h.area_id, h.nama, h.slug, h.bintang, h.harga_mulai,
+    h.deskripsi, h.alamat, h.highlight_text, h.gambar_url,
+    h.lat, h.lng, h.created_at, h.updated_at
 FROM hotel h
-JOIN master_area a ON h.area_id = a.id
-ORDER BY h.created_at DESC
-LIMIT 6;
-
--- =============================================================================
--- ADMIN: HOTEL — CRUD
--- =============================================================================
+WHERE h.slug = $1
+LIMIT 1;
 
 -- name: CreateHotel :one
 INSERT INTO hotel (
@@ -192,7 +199,7 @@ INSERT INTO hotel (
 UPDATE hotel SET
     area_id        = sqlc.arg('area_id'),
     nama           = sqlc.arg('nama'),
-    slug           = sqlc.arg('slug'),
+    slug           = sqlc.arg('slug_baru'), 
     bintang        = sqlc.arg('bintang'),
     harga_mulai    = sqlc.arg('harga_mulai'),
     deskripsi      = sqlc.narg('deskripsi'),
@@ -201,14 +208,20 @@ UPDATE hotel SET
     gambar_url     = sqlc.arg('gambar_url'),
     lat            = sqlc.arg('lat'),
     lng            = sqlc.arg('lng')
-WHERE id = sqlc.arg('id');
+WHERE slug = sqlc.arg('slug_lama');
 
 -- name: DeleteHotel :exec
-DELETE FROM hotel WHERE id = $1;
+DELETE FROM hotel WHERE slug = $1;
+
+-- name: CheckHotelNamaExists :one
+SELECT EXISTS(SELECT 1 FROM hotel WHERE LOWER(nama) = LOWER($1)) AS "exists";
+
+-- name: CheckHotelNamaExistsExcluding :one
+SELECT EXISTS(SELECT 1 FROM hotel WHERE LOWER(nama) = LOWER($1) AND slug != $2) AS "exists";
+
 
 -- =============================================================================
--- PUBLIC: EVENT — list, detail, maps, recommendation
--- Multi-filter: area, tahun, bulan, search keyword.
+-- PUBLIC / MOBILE: EVENT 
 -- =============================================================================
 
 -- name: ListEvent :many
@@ -235,42 +248,24 @@ WHERE
     AND (sqlc.narg('bulan')::int IS NULL OR e.bulan = sqlc.narg('bulan')::int)
     AND (sqlc.narg('keyword')::text IS NULL OR e.nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
 
--- name: GetEventBySlug :one
-SELECT
-    e.id, e.nama, e.slug, e.deskripsi, e.alamat,
-    e.tanggal_mulai, e.tanggal_selesai, e.info_tiket, e.harga_tiket,
-    e.gambar_url_hero, e.lat, e.lng, e.created_at,
-    a.id AS area_id, a.nama AS area_nama, a.slug AS area_slug
-FROM event e
-JOIN master_area a ON e.area_id = a.id
-WHERE e.slug = $1
-LIMIT 1;
-
--- name: GetEventByID :one
-SELECT
-    e.id, e.area_id, e.nama, e.slug, e.deskripsi, e.alamat,
-    e.tanggal_mulai, e.tanggal_selesai, e.info_tiket, e.harga_tiket,
-    e.gambar_url_thumbnail, e.gambar_url_hero,
-    e.lat, e.lng, e.tahun, e.bulan, e.created_at, e.updated_at
-FROM event e
-WHERE e.id = $1
-LIMIT 1;
-
 -- name: ListEventMaps :many
-SELECT id, nama, slug, gambar_url_thumbnail, tanggal_mulai, lat, lng
+SELECT id, nama, slug, gambar_url_thumbnail, lat, lng
 FROM event
 WHERE
     (sqlc.narg('area_id')::int IS NULL OR area_id = sqlc.narg('area_id')::int)
-    AND (sqlc.narg('tahun')::int IS NULL OR tahun = sqlc.narg('tahun')::int);
+    AND (sqlc.narg('tahun')::int IS NULL OR EXTRACT(YEAR FROM tanggal_mulai) = sqlc.narg('tahun')::int)
+    AND (sqlc.narg('keyword')::text IS NULL OR nama ILIKE '%' || sqlc.narg('keyword')::text || '%');
 
 -- name: GetRecommendationEvent :many
 SELECT
-    e.id, e.nama, e.slug, e.tanggal_mulai, e.tanggal_selesai,
-    e.harga_tiket, e.gambar_url_thumbnail, e.tahun, e.bulan,
-    a.nama AS area_nama
-FROM event e
-JOIN master_area a ON e.area_id = a.id
-ORDER BY e.created_at DESC
+    id,
+    nama,
+    alamat,
+    gambar_url_thumbnail,
+    EXTRACT(DAY FROM tanggal_mulai)::int AS tanggal,
+    EXTRACT(MONTH FROM tanggal_mulai)::int AS bulan
+FROM event
+ORDER BY RANDOM()
 LIMIT 6;
 
 -- name: GetEventByIDPublic :one
@@ -288,8 +283,18 @@ LIMIT 1;
 SELECT DISTINCT tahun FROM event ORDER BY tahun DESC;
 
 -- =============================================================================
--- ADMIN: EVENT — CRUD
+-- ADMIN: EVENT 
 -- =============================================================================
+
+-- name: GetEventBySlugAdmin :one
+SELECT
+    e.id, e.area_id, e.nama, e.slug, e.deskripsi, e.alamat,
+    e.tanggal_mulai, e.tanggal_selesai, e.info_tiket, e.harga_tiket,
+    e.gambar_url_thumbnail, e.gambar_url_hero,
+    e.lat, e.lng, e.tahun, e.bulan, e.created_at, e.updated_at
+FROM event e
+WHERE e.slug = $1
+LIMIT 1;
 
 -- name: CreateEvent :one
 INSERT INTO event (
@@ -308,7 +313,7 @@ INSERT INTO event (
 UPDATE event SET
     area_id              = sqlc.arg('area_id'),
     nama                 = sqlc.arg('nama'),
-    slug                 = sqlc.arg('slug'),
+    slug                 = sqlc.arg('slug_baru'), 
     deskripsi            = sqlc.arg('deskripsi'),
     alamat               = sqlc.arg('alamat'),
     tanggal_mulai        = sqlc.arg('tanggal_mulai'),
@@ -319,7 +324,13 @@ UPDATE event SET
     gambar_url_hero      = sqlc.arg('gambar_url_hero'),
     lat                  = sqlc.arg('lat'),
     lng                  = sqlc.arg('lng')
-WHERE id = sqlc.arg('id');
+WHERE slug = sqlc.arg('slug_lama');
 
 -- name: DeleteEvent :exec
-DELETE FROM event WHERE id = $1;
+DELETE FROM event WHERE slug = $1;
+
+-- name: CheckEventNamaExists :one
+SELECT EXISTS(SELECT 1 FROM event WHERE LOWER(nama) = LOWER($1)) AS "exists";
+
+-- name: CheckEventNamaExistsExcluding :one
+SELECT EXISTS(SELECT 1 FROM event WHERE LOWER(nama) = LOWER($1) AND slug != $2) AS "exists";

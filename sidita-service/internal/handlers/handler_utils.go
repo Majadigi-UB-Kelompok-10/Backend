@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -73,7 +75,9 @@ func respondCached(c fiber.Ctx, key string) bool {
 	if cached, ok := cache.GlobalCache.Get(key); ok {
 		c.Set("Content-Type", "application/json")
 		c.Set("X-Cache", "HIT")
-		_ = c.Send(cached)
+		if err := c.Send(cached); err != nil {
+			slog.Error("respondCached: gagal mengirim response", "key", key, "error", err)
+		}
 		return true
 	}
 	c.Set("X-Cache", "MISS")
@@ -81,7 +85,12 @@ func respondCached(c fiber.Ctx, key string) bool {
 }
 
 func cacheJSON(c fiber.Ctx, key string, ttl time.Duration, body interface{}) error {
-	cache.GlobalCache.Set(key, body, ttl)
+	data, err := json.Marshal(body)
+	if err != nil {
+		slog.Error("cacheJSON: gagal marshal body", "key", key, "error", err)
+		return c.JSON(body)
+	}
+	cache.GlobalCache.Set(key, data, ttl)
 	return c.JSON(body)
 }
 
@@ -181,6 +190,17 @@ func uploadImage(
 		return "", "", fmt.Errorf("format gambar harus JPG/PNG/WEBP")
 	}
 
+	dangerousExts := map[string]bool{
+		"php": true, "jsp": true, "asp": true, "aspx": true,
+		"sh": true, "exe": true, "py": true, "rb": true, "cgi": true,
+	}
+	nameParts := strings.Split(strings.ToLower(fileHeader.Filename), ".")
+	for _, part := range nameParts[:len(nameParts)-1] {
+		if dangerousExts[part] {
+			return "", "", fmt.Errorf("nama file mengandung ekstensi berbahaya")
+		}
+	}
+
 	resCld, err := cld.Upload.Upload(ctx, file, uploader.UploadParams{
 		Folder: folderName,
 	})
@@ -197,6 +217,9 @@ func destroyImageAsync(cld *cloudinary.Cloudinary, publicID string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _ = cld.Upload.Destroy(ctx, uploader.DestroyParams{PublicID: publicID})
+		_, err := cld.Upload.Destroy(ctx, uploader.DestroyParams{PublicID: publicID})
+		if err != nil {
+			slog.Error("destroyImageAsync: gagal hapus gambar Cloudinary", "publicID", publicID, "error", err)
+		}
 	}()
 }

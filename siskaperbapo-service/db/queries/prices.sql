@@ -62,6 +62,12 @@ RETURNING id, nama, slug;
 -- name: DeleteBahanPokok :exec
 DELETE FROM bahan_pokok WHERE id = sqlc.arg('id');
 
+-- name: CheckBahanPokokNamaExists :one
+SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1)) AS "exists";
+
+-- name: CheckBahanPokokNamaExistsExcluding :one
+SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1) AND id != $2) AS "exists";
+
 -- name: UpsertHargaHarian :one
 INSERT INTO harga_harian (bahan_pokok_id, area_id, harga, tanggal)
 VALUES (sqlc.arg('bahan_pokok_id'), sqlc.arg('area_id'), sqlc.arg('harga'), sqlc.arg('tanggal'))
