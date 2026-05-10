@@ -27,8 +27,18 @@ func (h *SiskaperbapoHandler) GetAllBahanPokok(c fiber.Ctx) error {
 	hariIni := time.Now().Format("2006-01-02")
 	tanggalStr := c.Query("tanggal", hariIni)
 
-	bahanPokok, _ := utils.ValidateQueryString(c.Query("bahan_pokok"), 100, "bahan_pokok")
-	areaInput, _ := utils.ValidateQueryString(c.Query("area"), 100, "area")
+	bahanPokok, errBahan := utils.ValidateQueryString(c.Query("bahan_pokok"), 100, "bahan_pokok")
+	if errBahan != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code: "ERR_VALIDATION", Message: errBahan.Message,
+		})
+	}
+	areaInput, errArea := utils.ValidateQueryString(c.Query("area"), 100, "area")
+	if errArea != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Code: "ERR_VALIDATION", Message: errArea.Message,
+		})
+	}
 	areaSlugPilihan := ""
 	if areaInput != "" {
 		areaSlugPilihan = generateSlug(areaInput)
