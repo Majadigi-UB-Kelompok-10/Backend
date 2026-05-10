@@ -7,8 +7,6 @@ import (
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const ContextQueryTimeout = 5 * time.Second
@@ -21,13 +19,6 @@ func NewEndpointHandler(q *db.Queries) *EndpointHandler {
 	return &EndpointHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -63,7 +54,7 @@ func (h *EndpointHandler) GetEndpointList(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *EndpointHandler) GetEndpointById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -126,7 +117,7 @@ func (h *EndpointHandler) CreateEndpoint(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *EndpointHandler) UpdateEndpoint(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -158,7 +149,7 @@ func (h *EndpointHandler) UpdateEndpoint(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *EndpointHandler) DeleteEndpoint(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
