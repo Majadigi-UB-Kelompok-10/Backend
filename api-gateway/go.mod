@@ -6,6 +6,7 @@ require (
 	github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.5
 	github.com/bytedance/sonic v1.15.0
 	github.com/gofiber/fiber/v3 v3.1.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
 )
