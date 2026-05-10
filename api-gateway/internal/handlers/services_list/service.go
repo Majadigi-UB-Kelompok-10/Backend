@@ -2,13 +2,11 @@ package services_list
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -22,13 +20,6 @@ func NewServiceHandler(q *db.Queries) *ServiceHandler {
 	return &ServiceHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -47,45 +38,28 @@ type UpdateServiceRequest struct {
 }
 
 // ---------------------------------------------------------------------
-// 01. List Services (paginated)
+// 01. List Services (all, with optional ?search= filter)
 // ---------------------------------------------------------------------
 
 func (h *ServiceHandler) ListServices(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	limit, _ := strconv.Atoi(c.Query("limit", "10"))
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 10
-	}
-	offset := (page - 1) * limit
+	search := c.Query("search")
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	data, err := h.Queries.ListServices(ctx, db.ListServicesParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
-	})
+	if search != "" {
+		data, err := h.Queries.SearchServices(ctx, "%"+search+"%")
+		if err != nil {
+			return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal mencari layanan", Detail: err.Error()})
+		}
+		return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
+	}
+
+	data, err := h.Queries.GetAllServices(ctx)
 	if err != nil {
 		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat daftar layanan", Detail: err.Error()})
 	}
-
-	total, err := h.Queries.CountServices(ctx)
-	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal menghitung jumlah layanan", Detail: err.Error()})
-	}
-
-	return c.JSON(handlers.SuccessResponse{
-		Pesan: "Sukses",
-		Data:  data,
-		Pagination: handlers.PaginationMeta{
-			Page:  page,
-			Limit: limit,
-			Total: total,
-		},
-	})
+	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }
 
 // ---------------------------------------------------------------------
@@ -93,7 +67,7 @@ func (h *ServiceHandler) ListServices(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ServiceHandler) GetServiceById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -109,59 +83,7 @@ func (h *ServiceHandler) GetServiceById(c fiber.Ctx) error {
 }
 
 // ---------------------------------------------------------------------
-// 03. Get Service By Title
-// ---------------------------------------------------------------------
-
-func (h *ServiceHandler) GetServiceByTitle(c fiber.Ctx) error {
-	title := c.Params("title")
-
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
-
-	data, err := h.Queries.GetServiceByTitle(ctx, title)
-	if err != nil {
-		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Layanan tidak ditemukan", Detail: err.Error()})
-	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
-}
-
-// ---------------------------------------------------------------------
-// 04. Get All Normalized Service-Category
-// ---------------------------------------------------------------------
-
-func (h *ServiceHandler) GetAllNormalized(c fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
-
-	data, err := h.Queries.GetAllNormalizedServiceCategory(ctx)
-	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat data layanan ternormalisasi", Detail: err.Error()})
-	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
-}
-
-// ---------------------------------------------------------------------
-// 05. Get Normalized Service-Category By ID
-// ---------------------------------------------------------------------
-
-func (h *ServiceHandler) GetNormalizedById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
-	if err != nil {
-		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
-
-	data, err := h.Queries.GetNormalizedServiceCategoryById(ctx, id)
-	if err != nil {
-		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Layanan tidak ditemukan", Detail: err.Error()})
-	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
-}
-
-// ---------------------------------------------------------------------
-// 06. Create Service
+// 03. Create Service
 // ---------------------------------------------------------------------
 
 func (h *ServiceHandler) CreateService(c fiber.Ctx) error {
@@ -197,7 +119,7 @@ func (h *ServiceHandler) CreateService(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ServiceHandler) UpdateService(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -235,7 +157,7 @@ func (h *ServiceHandler) UpdateService(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ServiceHandler) DeleteService(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
