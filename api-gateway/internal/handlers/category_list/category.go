@@ -7,7 +7,6 @@ import (
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,13 +20,6 @@ func NewCategoryHandler(q *db.Queries) *CategoryHandler {
 	return &CategoryHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -63,7 +55,7 @@ func (h *CategoryHandler) ListCategories(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *CategoryHandler) GetCategoryById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -79,24 +71,7 @@ func (h *CategoryHandler) GetCategoryById(c fiber.Ctx) error {
 }
 
 // ---------------------------------------------------------------------
-// 03. Get Category By Name
-// ---------------------------------------------------------------------
-
-func (h *CategoryHandler) GetCategoryByName(c fiber.Ctx) error {
-	name := c.Params("name")
-
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
-
-	data, err := h.Queries.GetCategoryByName(ctx, name)
-	if err != nil {
-		return c.Status(404).JSON(handlers.ErrorResponse{Error: "Kategori tidak ditemukan", Detail: err.Error()})
-	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
-}
-
-// ---------------------------------------------------------------------
-// 04. Create Category
+// 03. Create Category
 // ---------------------------------------------------------------------
 
 func (h *CategoryHandler) CreateCategory(c fiber.Ctx) error {
@@ -131,7 +106,7 @@ func (h *CategoryHandler) CreateCategory(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *CategoryHandler) UpdateCategory(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -168,7 +143,7 @@ func (h *CategoryHandler) UpdateCategory(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *CategoryHandler) DeleteCategory(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -182,17 +157,3 @@ func (h *CategoryHandler) DeleteCategory(c fiber.Ctx) error {
 	return c.JSON(handlers.SuccessResponse{Pesan: "Kategori berhasil dihapus"})
 }
 
-// ---------------------------------------------------------------------
-// 07. Get All Categories
-// ---------------------------------------------------------------------
-
-func (h *CategoryHandler) GetAllCategories(c fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
-	defer cancel()
-
-	data, err := h.Queries.GetAllCategories(ctx)
-	if err != nil {
-		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat semua kategori", Detail: err.Error()})
-	}
-	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
-}
