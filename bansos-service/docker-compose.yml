@@ -1,0 +1,67 @@
+services:
+  bansos-redis:
+    image: redis:8.6
+    container_name: bansos-redis
+    ports:
+      - "6387:6379"
+    volumes:
+      - bansos-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bansos-db:
+    image: postgres:18-alpine
+    container_name: bansos-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5440:5432"
+    volumes:
+      - bansos-postgres-data:/var/lib/postgresql
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bansos-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: bansos-api
+    ports:
+      - "5005:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=${ENVIRONMENT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    volumes:
+      - .:/app
+    depends_on:
+      bansos-db:
+        condition: service_healthy
+      bansos-redis:
+        condition: service_healthy
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+volumes:
+  bansos-postgres-data:
+  bansos-redis-data:
+
+
