@@ -362,7 +362,7 @@ func main() {
 	go rssaHandler.RunCacheWarmup()
 
 	go func() {
-		registry.AutoRegister(cfg.GatewayDBURL, "rssa", cfg.ServicePublic)
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "rssa", cfg.ServicePublic, "RS SAIFUL ANWAR", "https://placeholder.majadigi.id/rssa.png", "Rumah Sakit dr. Saiful Anwar Malang", []string{"b1000001-0000-4000-8000-000000000001", "b1000001-0000-4000-8000-000000000010"})
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
