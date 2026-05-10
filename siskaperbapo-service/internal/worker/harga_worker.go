@@ -97,7 +97,11 @@ func executeAutoCarryOver(pool *HargaWorkerPool, queries *db.Queries) {
 			Tanggal:      kemarinPg,
 		})
 		if err != nil {
-			continue 
+			slog.Warn("worker.cron.get_harga_error",
+				slog.Int("bahan_id", int(bahan.ID)),
+				slog.String("error", err.Error()),
+			)
+			continue
 		}
 
 		for _, hk := range hargaKemarinList {
@@ -172,7 +176,11 @@ func (p *HargaWorkerPool) processJob(id int, job HargaJob) {
 
 		delay := time.Duration(job.Retries*100) * time.Millisecond
 		time.AfterFunc(delay, func() {
-			p.jobs <- job
+			select {
+			case p.jobs <- job:
+			default:
+				slog.Warn("worker.retry_dropped", slog.Int("bahan_id", int(job.BahanPokokID)))
+			}
 		})
 	} else {
 		slog.Error("worker.job_failed_permanently",
