@@ -80,7 +80,12 @@ func (h *BapendaHandler) GetInfoPajak(c fiber.Ctx) error {
 				OpsenPkb:           data.OpsenPkb,
 				Swdkllj:            data.Swdkllj,
 				ParkirBerlangganan: data.ParkirBerlangganan,
-				TotalPajak:         int64(data.TotalPajakTahunan.Int32),
+				TotalPajak: func() int64 {
+					if data.TotalPajakTahunan.Valid {
+						return int64(data.TotalPajakTahunan.Int32)
+					}
+					return 0
+				}(),
 			},
 			Estimasi5Tahunan: Estimasi5Tahunan{
 				CetakStnk: data.CetakStnk,
@@ -307,8 +312,16 @@ func calculateEstimasi(nilaiJual int64, tarifList []db.GetAllTarifPKBRow) []Esti
 	nilaiFloat := float64(nilaiJual)
 
 	for _, t := range tarifList {
-		tpkb, _ := t.TarifPkbPersen.Float64Value()
-		tops, _ := t.OpsenPkbPersen.Float64Value()
+		tpkb, err := t.TarifPkbPersen.Float64Value()
+		if err != nil || !tpkb.Valid {
+			slog.Warn("bapenda.tarif.float64_invalid", "jenis_plat", t.JenisPlat)
+			continue
+		}
+		tops, err := t.OpsenPkbPersen.Float64Value()
+		if err != nil || !tops.Valid {
+			slog.Warn("bapenda.tarif.opsen_float64_invalid", "jenis_plat", t.JenisPlat)
+			continue
+		}
 		pkbPokok := nilaiFloat * tpkb.Float64
 
 		estimasi = append(estimasi, EstimasiTarif{
