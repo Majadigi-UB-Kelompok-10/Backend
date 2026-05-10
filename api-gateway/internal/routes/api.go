@@ -14,6 +14,7 @@ import (
 	polHandler "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers/policy_list"
 	shcHandler "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers/services_has_categories"
 	svcHandler "github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers/services_list"
+	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/middleware"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/proxy"
 )
@@ -119,7 +120,7 @@ func SetupPublicRoutes(app *fiber.App, q *db.Queries) {
 // ---------------------------------------------------------------------------
 
 func SetupAdminRoutes(app *fiber.App, q *db.Queries) {
-	admin := app.Group("/api/v1/admin")
+	admin := app.Group("/api/v1/admin", middleware.RequireAuth(), middleware.RequireAdmin)
 
 	setupAdminCategoryRoutes(admin, q)
 	setupAdminEndpointRoutes(admin, q)
@@ -145,9 +146,6 @@ func setupPublicCategoryRoutes(pub fiber.Router, q *db.Queries) {
 	cats := pub.Group("/categories")
 
 	cats.Get("/", h.ListCategories)
-	cats.Get("/all", h.GetAllCategories)
-	// Static segment must come before the parametric /:id group
-	cats.Get("/name/:name", h.GetCategoryByName)
 
 	byID := cats.Group("/:id")
 	byID.Get("/", h.GetCategoryById)
@@ -181,14 +179,10 @@ func setupPublicServiceRoutes(pub fiber.Router, q *db.Queries) {
 	svcs := pub.Group("/services")
 
 	svcs.Get("/", h.ListServices)
-	// Static segments before /:id
-	svcs.Get("/all", h.GetAllServices)
-	svcs.Get("/normalized", h.GetAllNormalized)
-	svcs.Get("/title/:title", h.GetServiceByTitle)
+	svcs.Get("/personalized", shc.GetPersonalizedServices)
 
 	byID := svcs.Group("/:id")
 	byID.Get("/", h.GetServiceById)
-	byID.Get("/normalized", h.GetNormalizedById)
 	byID.Get("/categories", shc.ListCategoriesByServiceId)
 }
 
