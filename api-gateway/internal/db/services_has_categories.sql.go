@@ -52,7 +52,7 @@ func (q *Queries) GetAllServicesHasCategories(ctx context.Context) ([]ServicesHa
 }
 
 const listCategoriesByServiceId = `-- name: ListCategoriesByServiceId :many
-SELECT c.category_list_id, c.name, c.description, c.created_at FROM category_list c
+SELECT c.category_list_id, c.name, c.description, c.created_at, c.is_popular FROM category_list c
 JOIN services_has_categories sc ON c.category_list_id = sc.category_list_id
 WHERE sc.service_list_id = $1
 `
@@ -70,6 +70,41 @@ func (q *Queries) ListCategoriesByServiceId(ctx context.Context, serviceListID p
 			&i.CategoryListID,
 			&i.Name,
 			&i.Description,
+			&i.CreatedAt,
+			&i.IsPopular,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listServicesByCategories = `-- name: ListServicesByCategories :many
+SELECT DISTINCT s.service_list_id, s.title, s.description, s.icon_url, s.created_at
+FROM service_list s
+JOIN services_has_categories sc ON s.service_list_id = sc.service_list_id
+WHERE sc.category_list_id = ANY($1::uuid[])
+ORDER BY s.title
+`
+
+func (q *Queries) ListServicesByCategories(ctx context.Context, dollar_1 []pgtype.UUID) ([]ServiceList, error) {
+	rows, err := q.db.Query(ctx, listServicesByCategories, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServiceList
+	for rows.Next() {
+		var i ServiceList
+		if err := rows.Scan(
+			&i.ServiceListID,
+			&i.Title,
+			&i.Description,
+			&i.IconUrl,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
