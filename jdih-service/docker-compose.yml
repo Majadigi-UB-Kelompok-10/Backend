@@ -1,0 +1,67 @@
+services:
+  jdih-redis:
+    image: redis:8.6
+    container_name: jdih-redis
+    ports:
+      - "6386:6379"
+    volumes:
+      - jdih-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - capstone-global-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  jdih-db:
+    image: postgres:18-alpine
+    container_name: jdih-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5441:5432"
+    volumes:
+      - jdih-postgres-data:/var/lib/postgresql
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - capstone-global-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  jdih-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: jdih-api
+    ports:
+      - "5004:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=${ENVIRONMENT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+    volumes:
+      - .:/app
+    depends_on:
+      jdih-db:
+        condition: service_healthy
+      jdih-redis:
+        condition: service_healthy
+    networks:
+      - capstone-global-network
+    restart: unless-stopped
+
+volumes:
+  jdih-postgres-data:
+  jdih-redis-data:
+
+
