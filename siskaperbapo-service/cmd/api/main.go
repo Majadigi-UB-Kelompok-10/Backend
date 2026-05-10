@@ -389,10 +389,15 @@ func main() {
 		siskaperbapoHandler.CacheWarmup()
 	}()
 
-	go func() {
-		registry.AutoRegister(cfg.GatewayDBURL, "siskaperbapo", cfg.ServicePublic)
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	registry.AutoRegisterFull(                                                                                                                                                                                                          
+      cfg.GatewayDBURL,
+      "siskaperbapo",                                                                                                                                                                                                                 
+      cfg.ServicePublic,
+      "SISKAPERBAPO",                                                                                                                                                                                                                 
+      "https://cdn.example.com/siskaperbapo.png",                                                                                                                                                                                     
+      "Sistem Ketersediaan dan Harga Bahan Pokok",
+      []string{"b1000001-0000-4000-8000-000000000008"}, // Harga Kebutuhan Pokok                                                                                                                                                      
+  )   
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
