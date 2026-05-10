@@ -7,14 +7,15 @@ RETURNING *;
 SELECT * FROM service_list
 WHERE service_list_id = $1 LIMIT 1;
 
--- name: GetServiceByTitle :one
-SELECT * FROM service_list
-WHERE title = $1 LIMIT 1;
-
 -- name: ListServices :many
 SELECT * FROM service_list
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: SearchServices :many
+SELECT * FROM service_list
+WHERE title ILIKE $1
+ORDER BY title ASC;
 
 -- name: UpdateService :one
 UPDATE service_list
