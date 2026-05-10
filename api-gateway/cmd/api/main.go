@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,6 +35,7 @@ func main() {
 		AppName:     "Majadigi Api Gateway",
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
+		BodyLimit:   1 * 1024 * 1024,
 	})
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
@@ -46,7 +46,7 @@ func main() {
 	queries := db.New(pool)
 
 	if err := routes.RefreshEndpoints(context.Background(), queries); err != nil {
-		log.Printf("Peringatan: Gagal load rute awal: %v\n", err)
+		slog.Warn("gateway.routes.initial_load_failed", "error", err)
 	}
 
 	adminHandler := gatewayAdmin.NewGatewayAdminHandler(queries)
@@ -55,16 +55,16 @@ func main() {
 	routes.SetupPublicRoutes(app, queries)
 	routes.SetupAdminRoutes(app, queries)
 	routes.SetupDynamicEndpoint(app)
-	fmt.Println("Dynamic endpoints configured")
+	slog.Info("gateway.routes.ready")
 
-	go startRealtimeObserver(pool, queries)
+	observerCtx, observerCancel := context.WithCancel(context.Background())
+	defer observerCancel()
+	go startRealtimeObserver(observerCtx, pool, queries)
 
 	go func() {
 		if err := app.Listen(":" + port); err != nil && err.Error() != "shutting down" {
-			log.Printf("Api Gateway error: %v\n", err)
+			slog.Error("gateway.listen.error", "error", err)
 		}
-
-		fmt.Println("Api Gateway listening on :" + port)
 	}()
 
 	init_helper.InitializeGracefulShutdownListener(&init_helper.ShutdownType{App: app, Pool: pool})
@@ -77,58 +77,87 @@ func gracefulShutdownListener() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	fmt.Println("\nGraceful Shutdown for other services...")
-
-	fmt.Println("Graceful shutdown complete")
+	slog.Info("gateway.shutdown.start")
+	slog.Info("gateway.shutdown.complete")
 }
 
-func startRealtimeObserver(pool *pgxpool.Pool, queries *db.Queries) {
-	fmt.Println("Observer Real-time dijalankan...")
+func startRealtimeObserver(ctx context.Context, pool *pgxpool.Pool, queries *db.Queries) {
+	slog.Info("observer.realtime.start")
 
 	for {
-		ctx := context.Background()
-		conn, err := pool.Acquire(ctx)
+		select {
+		case <-ctx.Done():
+			slog.Info("observer.realtime.shutdown")
+			return
+		default:
+		}
+
+		connCtx, connCancel := context.WithTimeout(ctx, 10*time.Second)
+		conn, err := pool.Acquire(connCtx)
+		connCancel()
 		if err != nil {
-			fmt.Printf("❌ Gagal mengambil koneksi listener: %v. Coba lagi 5 detik...\n", err)
-			time.Sleep(5 * time.Second)
+			slog.Error("observer.acquire.error", "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 			continue
 		}
 
 		_, err = conn.Exec(ctx, "LISTEN gateway_refresh_channel")
 		if err != nil {
-			fmt.Printf("❌ Gagal melakukan LISTEN: %v\n", err)
+			slog.Error("observer.listen.error", "error", err)
 			conn.Release()
-			time.Sleep(5 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 			continue
 		}
 
-		fmt.Println("Listener PostgreSQL...")
+		slog.Info("observer.listen.ready")
 
 		for {
-			ctxWait, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			select {
+			case <-ctx.Done():
+				conn.Release()
+				return
+			default:
+			}
+
+			ctxWait, cancel := context.WithTimeout(ctx, 15*time.Second)
 			_, err := conn.Conn().WaitForNotification(ctxWait)
 			cancel()
 
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					conn.Release()
+					return
+				}
 				if errors.Is(err, context.DeadlineExceeded) {
 					if pingErr := conn.Ping(ctx); pingErr != nil {
-						fmt.Printf("Koneksi mati diam-diam oleh Docker (Ping gagal). Reconnecting...\n")
+						slog.Warn("observer.connection.dead", "error", pingErr)
 						break
 					}
 					continue
 				}
-
-				fmt.Printf("Koneksi terputus tiba-tiba: %v. Reconnecting...\n", err)
+				slog.Warn("observer.connection.lost", "error", err)
 				break
 			}
 
-			fmt.Println("Sinyal UPDATE diterima! Memperbarui rute di RAM...")
+			slog.Info("observer.refresh.received")
 			if err := routes.RefreshEndpoints(ctx, queries); err != nil {
-				fmt.Printf("Gagal sinkronisasi RAM: %v\n", err)
+				slog.Error("observer.refresh.error", "error", err)
 			}
 		}
 
 		conn.Release()
-		time.Sleep(2 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
 	}
 }

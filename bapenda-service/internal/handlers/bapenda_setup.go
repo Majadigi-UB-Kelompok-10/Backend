@@ -35,7 +35,7 @@ func (h *BapendaHandler) RunCacheWarmup() {
 		if err != nil {
 			return fmt.Errorf("warmup jenis: %w", err)
 		}
-		cache.GlobalCache.SetWithTTL(
+		cache.GlobalCache.Set(
 			"dropdown:jenis",
 			SuccessResponse{Pesan: "Sukses", Data: jenisData},
 			CacheTTLStatic,
@@ -48,7 +48,7 @@ func (h *BapendaHandler) RunCacheWarmup() {
 		if err != nil {
 			return fmt.Errorf("warmup tarif: %w", err)
 		}
-		cache.GlobalCache.SetWithTTL("master:tarif_pkb", tarifData, CacheTTLStatic)
+		cache.GlobalCache.Set("master:tarif_pkb", tarifData, CacheTTLStatic)
 		return nil
 	})
 

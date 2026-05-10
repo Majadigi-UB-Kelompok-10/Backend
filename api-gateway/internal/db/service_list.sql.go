@@ -106,24 +106,6 @@ func (q *Queries) GetServiceById(ctx context.Context, serviceListID pgtype.UUID)
 	return i, err
 }
 
-const getServiceByTitle = `-- name: GetServiceByTitle :one
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list
-WHERE title = $1 LIMIT 1
-`
-
-func (q *Queries) GetServiceByTitle(ctx context.Context, title string) (ServiceList, error) {
-	row := q.db.QueryRow(ctx, getServiceByTitle, title)
-	var i ServiceList
-	err := row.Scan(
-		&i.ServiceListID,
-		&i.Title,
-		&i.Description,
-		&i.IconUrl,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const listServices = `-- name: ListServices :many
 SELECT service_list_id, title, description, icon_url, created_at FROM service_list
 ORDER BY created_at DESC
@@ -137,6 +119,38 @@ type ListServicesParams struct {
 
 func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]ServiceList, error) {
 	rows, err := q.db.Query(ctx, listServices, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServiceList
+	for rows.Next() {
+		var i ServiceList
+		if err := rows.Scan(
+			&i.ServiceListID,
+			&i.Title,
+			&i.Description,
+			&i.IconUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchServices = `-- name: SearchServices :many
+SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+WHERE title ILIKE $1
+ORDER BY title ASC
+`
+
+func (q *Queries) SearchServices(ctx context.Context, title string) ([]ServiceList, error) {
+	rows, err := q.db.Query(ctx, searchServices, title)
 	if err != nil {
 		return nil, err
 	}

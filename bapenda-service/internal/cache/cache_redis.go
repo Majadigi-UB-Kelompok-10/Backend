@@ -74,11 +74,7 @@ func (r *RedisCache) Get(key string) ([]byte, bool) {
 	return val, true
 }
 
-func (r *RedisCache) Set(key string, val interface{}) {
-	r.SetWithTTL(key, val, 0)
-}
-
-func (r *RedisCache) SetWithTTL(key string, val interface{}, ttl time.Duration) {
+func (r *RedisCache) Set(key string, val interface{}, ttl time.Duration) {
 	data, ok := serialize(key, val)
 	if !ok {
 		r.errs.Add(1)

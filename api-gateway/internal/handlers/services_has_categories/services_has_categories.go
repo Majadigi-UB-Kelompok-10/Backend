@@ -2,12 +2,12 @@ package services_has_categories
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,13 +21,6 @@ func NewServicesCategoriesHandler(q *db.Queries) *ServicesCategoriesHandler {
 	return &ServicesCategoriesHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -42,7 +35,7 @@ type AddCategoryRequest struct {
 // ---------------------------------------------------------------------
 
 func (h *ServicesCategoriesHandler) ListCategoriesByServiceId(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("id"))
+	serviceID, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -62,7 +55,7 @@ func (h *ServicesCategoriesHandler) ListCategoriesByServiceId(c fiber.Ctx) error
 // ---------------------------------------------------------------------
 
 func (h *ServicesCategoriesHandler) ListServicesByCategoryId(c fiber.Ctx) error {
-	categoryID, err := parseUUID(c.Params("id"))
+	categoryID, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -82,7 +75,7 @@ func (h *ServicesCategoriesHandler) ListServicesByCategoryId(c fiber.Ctx) error 
 // ---------------------------------------------------------------------
 
 func (h *ServicesCategoriesHandler) AddCategoryToService(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("id"))
+	serviceID, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID service tidak valid", Detail: err.Error()})
 	}
@@ -95,7 +88,7 @@ func (h *ServicesCategoriesHandler) AddCategoryToService(c fiber.Ctx) error {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "category_list_id wajib diisi"})
 	}
 
-	categoryID, err := parseUUID(req.CategoryListID)
+	categoryID, err := handlers.ParseUUID(req.CategoryListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "category_list_id tidak valid", Detail: err.Error()})
 	}
@@ -117,12 +110,12 @@ func (h *ServicesCategoriesHandler) AddCategoryToService(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ServicesCategoriesHandler) RemoveCategoryFromService(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("id"))
+	serviceID, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID service tidak valid", Detail: err.Error()})
 	}
 
-	categoryID, err := parseUUID(c.Params("category_id"))
+	categoryID, err := handlers.ParseUUID(c.Params("category_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID kategori tidak valid", Detail: err.Error()})
 	}
@@ -150,6 +143,45 @@ func (h *ServicesCategoriesHandler) GetAllServicesHasCategories(c fiber.Ctx) err
 	data, err := h.Queries.GetAllServicesHasCategories(ctx)
 	if err != nil {
 		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat semua relasi layanan-kategori", Detail: err.Error()})
+	}
+	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
+}
+
+// ---------------------------------------------------------------------
+// 06. Get Personalized Services
+// GET /api/v1/services/personalized?category_ids=uuid1,uuid2,uuid3
+// ---------------------------------------------------------------------
+
+func (h *ServicesCategoriesHandler) GetPersonalizedServices(c fiber.Ctx) error {
+	raw := c.Query("category_ids")
+	if raw == "" {
+		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "category_ids wajib diisi"})
+	}
+
+	parts := strings.Split(raw, ",")
+	categoryUUIDs := make([]pgtype.UUID, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		uid, err := handlers.ParseUUID(p)
+		if err != nil {
+			return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: p + ": " + err.Error()})
+		}
+		categoryUUIDs = append(categoryUUIDs, uid)
+	}
+
+	if len(categoryUUIDs) == 0 {
+		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "category_ids tidak boleh kosong"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.ListServicesByCategories(ctx, categoryUUIDs)
+	if err != nil {
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat layanan personal", Detail: err.Error()})
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }

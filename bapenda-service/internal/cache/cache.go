@@ -17,8 +17,7 @@ import (
 
 type Cache interface {
 	Get(key string) ([]byte, bool)
-	Set(key string, val interface{})
-	SetWithTTL(key string, val interface{}, ttl time.Duration)
+	Set(key string, val interface{}, ttl time.Duration)
 	Has(key string) bool
 	Delete(key string)
 	DeleteByPrefix(prefix string)
@@ -122,11 +121,7 @@ func (c *SimpleCache) Get(key string) ([]byte, bool) {
 	return item.data, true
 }
 
-func (c *SimpleCache) Set(key string, val interface{}) {
-	c.SetWithTTL(key, val, 0)
-}
-
-func (c *SimpleCache) SetWithTTL(key string, val interface{}, ttl time.Duration) {
+func (c *SimpleCache) Set(key string, val interface{}, ttl time.Duration) {
 	data, ok := serialize(key, val)
 	if !ok {
 		return

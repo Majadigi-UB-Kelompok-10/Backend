@@ -19,3 +19,10 @@ WHERE sc.category_list_id = $1;
 -- name: GetAllServicesHasCategories :many
 SELECT * FROM services_has_categories
 ORDER BY created_at DESC;
+
+-- name: ListServicesByCategories :many
+SELECT DISTINCT s.*
+FROM service_list s
+JOIN services_has_categories sc ON s.service_list_id = sc.service_list_id
+WHERE sc.category_list_id = ANY($1::uuid[])
+ORDER BY s.title;

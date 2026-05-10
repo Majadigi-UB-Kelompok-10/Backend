@@ -102,11 +102,13 @@ func (h *DestinasiHandler) ListDestinasi(c fiber.Ctx) error {
 	var areaIDArg pgtype.Int4
 	if areaName != "" {
 		area, err := h.Queries.GetAreaByName(ctx, areaName)
-		if err == nil {
-			areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
-		} else {
-			areaIDArg = pgtype.Int4{Int32: -1, Valid: true}
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Code:    "ERR_AREA_NOT_FOUND",
+				Message: "Area tidak ditemukan",
+			})
 		}
+		areaIDArg = pgtype.Int4{Int32: area.ID, Valid: true}
 	}
 
 	var keywordArg pgtype.Text

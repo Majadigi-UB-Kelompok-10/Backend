@@ -38,6 +38,14 @@ jobs:
               - 'rssa-service/**'  
             user-service:
               - 'user-service/**'
+            sinaker-service:
+              - 'sinaker-service/**'
+            transjatim-service:
+              - 'transjatim-service/**'
+            jdih-service:
+              -  'jdih-service/**'
+            bansos-service:
+              - 'bansos-service/**'  
 
 
 

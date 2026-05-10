@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -58,7 +60,9 @@ func respondCached(c fiber.Ctx, key string) bool {
 	if cached, ok := cache.GlobalCache.Get(key); ok {
 		c.Set("Content-Type", "application/json")
 		c.Set("X-Cache", "HIT")
-		_ = c.Send(cached)
+		if err := c.Send(cached); err != nil {
+			slog.Error("respondCached: gagal mengirim response", "key", key, "error", err)
+		}
 		return true
 	}
 	c.Set("X-Cache", "MISS")
@@ -66,7 +70,12 @@ func respondCached(c fiber.Ctx, key string) bool {
 }
 
 func cacheJSON(c fiber.Ctx, key string, ttl time.Duration, body interface{}) error {
-	cache.GlobalCache.Set(key, body, ttl)
+	data, err := json.Marshal(body)
+	if err != nil {
+		slog.Error("cacheJSON: gagal marshal body", "key", key, "error", err)
+		return c.JSON(body)
+	}
+	cache.GlobalCache.Set(key, data, ttl)
 	return c.JSON(body)
 }
 

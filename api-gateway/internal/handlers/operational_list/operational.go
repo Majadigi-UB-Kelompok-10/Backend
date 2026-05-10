@@ -8,7 +8,6 @@ import (
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -22,13 +21,6 @@ func NewOperationalHandler(q *db.Queries) *OperationalHandler {
 	return &OperationalHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -54,7 +46,7 @@ type UpdateOperationalRequest struct {
 // ---------------------------------------------------------------------
 
 func (h *OperationalHandler) GetOperationalByServiceId(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("service_id"))
+	serviceID, err := handlers.ParseUUID(c.Params("service_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -82,7 +74,7 @@ func (h *OperationalHandler) CreateOperational(c fiber.Ctx) error {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "service_list_id dan service_url wajib diisi"})
 	}
 
-	serviceID, err := parseUUID(req.ServiceListID)
+	serviceID, err := handlers.ParseUUID(req.ServiceListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "service_list_id tidak valid", Detail: err.Error()})
 	}
@@ -123,7 +115,7 @@ func (h *OperationalHandler) CreateOperational(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *OperationalHandler) UpdateOperational(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("service_id"))
+	serviceID, err := handlers.ParseUUID(c.Params("service_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -172,7 +164,7 @@ func (h *OperationalHandler) UpdateOperational(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *OperationalHandler) DeleteOperational(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("service_id"))
+	serviceID, err := handlers.ParseUUID(c.Params("service_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}

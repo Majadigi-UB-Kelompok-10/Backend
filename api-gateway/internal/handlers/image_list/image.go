@@ -7,7 +7,6 @@ import (
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,13 +20,6 @@ func NewImageHandler(q *db.Queries) *ImageHandler {
 	return &ImageHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -49,7 +41,7 @@ type UpdateImageRequest struct {
 // ---------------------------------------------------------------------
 
 func (h *ImageHandler) ListImagesByServiceId(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("service_id"))
+	serviceID, err := handlers.ParseUUID(c.Params("service_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -69,7 +61,7 @@ func (h *ImageHandler) ListImagesByServiceId(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ImageHandler) GetImageById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -97,7 +89,7 @@ func (h *ImageHandler) CreateImage(c fiber.Ctx) error {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "service_list_id dan image_url wajib diisi"})
 	}
 
-	serviceID, err := parseUUID(req.ServiceListID)
+	serviceID, err := handlers.ParseUUID(req.ServiceListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "service_list_id tidak valid", Detail: err.Error()})
 	}
@@ -126,7 +118,7 @@ func (h *ImageHandler) CreateImage(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ImageHandler) UpdateImage(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -163,7 +155,7 @@ func (h *ImageHandler) UpdateImage(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *ImageHandler) DeleteImage(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}

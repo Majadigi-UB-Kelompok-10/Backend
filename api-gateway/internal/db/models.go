@@ -16,6 +16,7 @@ type CategoryList struct {
 	Name           string
 	Description    pgtype.Text
 	CreatedAt      pgtype.Timestamptz
+	IsPopular      bool
 }
 
 // Registry of Endpoint available in Backend

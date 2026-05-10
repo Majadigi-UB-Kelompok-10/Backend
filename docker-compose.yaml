@@ -7,6 +7,11 @@ include:
   - ./api-gateway/docker-compose.yaml
   - ./klinik-service/docker-compose.yml
   - ./rssa-service/docker-compose.yml
+  - ./transjatim-service/docker-compose.yml
+  - ./sinaker-service/docker-compose.yml
+  - ./jdih-service/docker-compose.yml
+  - ./bansos-service/docker-compose.yml
+  - ./user-service/docker-compose.yml
 
 networks:
   capstone-global-network:

@@ -7,10 +7,6 @@ RETURNING *;
 SELECT * FROM category_list
 WHERE category_list_id = $1 LIMIT 1;
 
--- name: GetCategoryByName :one
-SELECT * FROM category_list
-WHERE name = $1 LIMIT 1;
-
 -- name: ListCategories :many
 SELECT * FROM category_list
 ORDER BY name ASC;
@@ -25,6 +21,3 @@ RETURNING *;
 DELETE FROM category_list
 WHERE category_list_id = $1;
 
--- name: GetAllCategories :many
-SELECT * FROM category_list
-ORDER BY created_at DESC;
