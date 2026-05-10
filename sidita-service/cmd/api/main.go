@@ -384,7 +384,7 @@ func main() {
 	}()
 
 	go func() {
-		registry.AutoRegister(cfg.GatewayDBURL, "sidita", cfg.ServicePublic)
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "sidita", cfg.ServicePublic, "SIDITA", "https://placeholder.majadigi.id/sidita.png", "Sistem Digitalisasi Pariwisata Jawa Timur", []string{"b1000001-0000-4000-8000-000000000009"})
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
