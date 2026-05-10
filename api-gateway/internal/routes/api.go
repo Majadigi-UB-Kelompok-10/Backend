@@ -249,6 +249,8 @@ func setupPublicServicesCategoriesRoutes(pub fiber.Router, q *db.Queries) {
 
 	sc := pub.Group("/services-has-categories")
 	sc.Get("/", shc.GetAllServicesHasCategories)
+	sc.Get("/normalized", shc.GetAllNormalizedServiceCategory)
+	sc.Get("/normalized/:id", shc.GetNormalizedServiceCategoryById)
 }
 
 // ===========================================================================

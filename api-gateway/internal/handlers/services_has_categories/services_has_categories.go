@@ -185,3 +185,38 @@ func (h *ServicesCategoriesHandler) GetPersonalizedServices(c fiber.Ctx) error {
 	}
 	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
 }
+
+// ---------------------------------------------------------------------
+// 07. Get All Normalized Service Category
+// ---------------------------------------------------------------------
+
+func (h *ServicesCategoriesHandler) GetAllNormalizedServiceCategory(c fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetAllNormalizedServiceCategory(ctx)
+	if err != nil {
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat normalized service category", Detail: err.Error()})
+	}
+	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
+}
+
+// ---------------------------------------------------------------------
+// 08. Get Normalized Service Category By Id
+// ---------------------------------------------------------------------
+
+func (h *ServicesCategoriesHandler) GetNormalizedServiceCategoryById(c fiber.Ctx) error {
+	serviceID, err := handlers.ParseUUID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	data, err := h.Queries.GetNormalizedServiceCategoryById(ctx, serviceID)
+	if err != nil {
+		return c.Status(500).JSON(handlers.ErrorResponse{Error: "Gagal memuat normalized service category berdasarkan ID", Detail: err.Error()})
+	}
+	return c.JSON(handlers.SuccessResponse{Pesan: "Sukses", Data: data})
+}
