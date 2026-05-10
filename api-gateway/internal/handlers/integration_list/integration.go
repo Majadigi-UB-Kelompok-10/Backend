@@ -7,7 +7,6 @@ import (
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/db"
 	"github.com/Majadigi-UB-Kelompok-10/api-gateway/internal/handlers"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,13 +20,6 @@ func NewIntegrationHandler(q *db.Queries) *IntegrationHandler {
 	return &IntegrationHandler{Queries: q}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: id, Valid: true}, nil
-}
 
 // ---------------------------------------------------------------------
 // Request DTOs
@@ -51,7 +43,7 @@ type UpdateIntegrationRequest struct {
 // ---------------------------------------------------------------------
 
 func (h *IntegrationHandler) ListIntegrationsByServiceId(c fiber.Ctx) error {
-	serviceID, err := parseUUID(c.Params("service_id"))
+	serviceID, err := handlers.ParseUUID(c.Params("service_id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -71,7 +63,7 @@ func (h *IntegrationHandler) ListIntegrationsByServiceId(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *IntegrationHandler) GetIntegrationById(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -99,11 +91,11 @@ func (h *IntegrationHandler) CreateIntegration(c fiber.Ctx) error {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "service_list_id, endpoint_list_id, dan title wajib diisi"})
 	}
 
-	serviceID, err := parseUUID(req.ServiceListID)
+	serviceID, err := handlers.ParseUUID(req.ServiceListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "service_list_id tidak valid", Detail: err.Error()})
 	}
-	endpointID, err := parseUUID(req.EndpointListID)
+	endpointID, err := handlers.ParseUUID(req.EndpointListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "endpoint_list_id tidak valid", Detail: err.Error()})
 	}
@@ -133,7 +125,7 @@ func (h *IntegrationHandler) CreateIntegration(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *IntegrationHandler) UpdateIntegration(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
@@ -146,7 +138,7 @@ func (h *IntegrationHandler) UpdateIntegration(c fiber.Ctx) error {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "Validasi gagal", Detail: "endpoint_list_id dan title wajib diisi"})
 	}
 
-	endpointID, err := parseUUID(req.EndpointListID)
+	endpointID, err := handlers.ParseUUID(req.EndpointListID)
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "endpoint_list_id tidak valid", Detail: err.Error()})
 	}
@@ -176,7 +168,7 @@ func (h *IntegrationHandler) UpdateIntegration(c fiber.Ctx) error {
 // ---------------------------------------------------------------------
 
 func (h *IntegrationHandler) DeleteIntegration(c fiber.Ctx) error {
-	id, err := parseUUID(c.Params("id"))
+	id, err := handlers.ParseUUID(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(handlers.ErrorResponse{Error: "UUID tidak valid", Detail: err.Error()})
 	}
