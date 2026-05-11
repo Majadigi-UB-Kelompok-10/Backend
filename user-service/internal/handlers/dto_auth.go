@@ -77,6 +77,7 @@ type UserProfile struct {
 	Gender    string `json:"gender,omitempty"`
 	Role      string `json:"role"`
 	IsActive  bool   `json:"is_active"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type RefreshResponse struct {
