@@ -479,6 +479,11 @@ func (h *AuthHandler) VerifyEmail(c fiber.Ctx) error {
 func (h *AuthHandler) GetFavorites(c fiber.Ctx) error {
 	userIDStr, _ := c.Locals("user_id").(string)
 
+	cacheKey := "user:favorites:" + userIDStr
+	if respondCached(c, cacheKey) {
+		return nil
+	}
+
 	userID, err := stringToUUID(userIDStr)
 	if err != nil {
 		return c.Status(401).JSON(ErrorResponse{Code: "ERR_UNAUTHORIZED", Message: "Token tidak valid"})
@@ -487,18 +492,35 @@ func (h *AuthHandler) GetFavorites(c fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
+	updatedAt, err := h.Queries.GetFavoritesUpdatedAt(ctx, userID)
+	if err != nil {
+		slog.Error("auth.get_favorites.ts_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal memuat favorit"})
+	}
+
 	rows, err := h.Queries.GetUserFavorites(ctx, userID)
 	if err != nil {
 		slog.Error("auth.get_favorites.error", slog.String("err", err.Error()))
 		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal memuat favorit"})
 	}
 
-	ids := make([]string, 0, len(rows))
+	type favoriteItem struct {
+		ServiceID string `json:"service_id"`
+		UpdatedAt string `json:"updated_at"`
+	}
+	items := make([]favoriteItem, 0, len(rows))
 	for _, r := range rows {
-		ids = append(ids, uuidToString(r))
+		items = append(items, favoriteItem{
+			ServiceID: uuidToString(r.ServiceID),
+			UpdatedAt: r.UpdatedAt.Time.UTC().Format(time.RFC3339),
+		})
 	}
 
-	return c.JSON(SuccessResponse{Pesan: "Sukses", Data: fiber.Map{"service_ids": ids}})
+	res := SuccessResponse{Pesan: "Sukses", Data: fiber.Map{
+		"updated_at": updatedAt.Time.UTC().Format(time.RFC3339),
+		"favorites":  items,
+	}}
+	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
 }
 
 // -----------------------------------------------------------------------------
@@ -528,6 +550,9 @@ func (h *AuthHandler) AddFavorite(c fiber.Ctx) error {
 		slog.Error("auth.add_favorite.error", slog.String("err", err.Error()))
 		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menambah favorit"})
 	}
+
+	_ = h.Queries.BumpFavoritesTimestamp(ctx, userID)
+	invalidateUserCache(userIDStr)
 
 	return c.Status(201).JSON(SuccessResponse{Pesan: "Layanan berhasil ditambahkan ke favorit"})
 }
@@ -559,6 +584,9 @@ func (h *AuthHandler) RemoveFavorite(c fiber.Ctx) error {
 		slog.Error("auth.remove_favorite.error", slog.String("err", err.Error()))
 		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menghapus favorit"})
 	}
+
+	_ = h.Queries.BumpFavoritesTimestamp(ctx, userID)
+	invalidateUserCache(userIDStr)
 
 	return c.JSON(SuccessResponse{Pesan: "Layanan berhasil dihapus dari favorit"})
 }

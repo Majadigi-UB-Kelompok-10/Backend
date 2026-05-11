@@ -182,6 +182,26 @@ func (q *Queries) DeactivateUser(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const bumpFavoritesTimestamp = `-- name: BumpFavoritesTimestamp :exec
+UPDATE users SET favorites_updated_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) BumpFavoritesTimestamp(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, bumpFavoritesTimestamp, id)
+	return err
+}
+
+const getFavoritesUpdatedAt = `-- name: GetFavoritesUpdatedAt :one
+SELECT favorites_updated_at FROM users WHERE id = $1
+`
+
+func (q *Queries) GetFavoritesUpdatedAt(ctx context.Context, id pgtype.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getFavoritesUpdatedAt, id)
+	var favorites_updated_at pgtype.Timestamptz
+	err := row.Scan(&favorites_updated_at)
+	return favorites_updated_at, err
+}
+
 const deleteExpiredTokens = `-- name: DeleteExpiredTokens :exec
 DELETE FROM refresh_tokens WHERE expires_at < NOW() OR is_revoked = true
 `
@@ -374,27 +394,32 @@ func (q *Queries) GetUserFavoriteCount(ctx context.Context, userID pgtype.UUID) 
 
 const getUserFavorites = `-- name: GetUserFavorites :many
 
-SELECT service_id FROM user_service_favorites
+SELECT service_id, added_at AS updated_at FROM user_service_favorites
 WHERE user_id = $1
 ORDER BY added_at DESC
 `
 
+type GetUserFavoritesRow struct {
+	ServiceID pgtype.UUID        `json:"service_id"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 // =============================================================================
 // Service Favorites
 // =============================================================================
-func (q *Queries) GetUserFavorites(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+func (q *Queries) GetUserFavorites(ctx context.Context, userID pgtype.UUID) ([]GetUserFavoritesRow, error) {
 	rows, err := q.db.Query(ctx, getUserFavorites, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []pgtype.UUID
+	var items []GetUserFavoritesRow
 	for rows.Next() {
-		var service_id pgtype.UUID
-		if err := rows.Scan(&service_id); err != nil {
+		var row GetUserFavoritesRow
+		if err := rows.Scan(&row.ServiceID, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
-		items = append(items, service_id)
+		items = append(items, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

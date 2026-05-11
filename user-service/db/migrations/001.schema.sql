@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS users (
     email_verify_token      VARCHAR(64),
     email_verify_expires_at TIMESTAMPTZ,
     created_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    favorites_updated_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_users_email              ON users(email);
