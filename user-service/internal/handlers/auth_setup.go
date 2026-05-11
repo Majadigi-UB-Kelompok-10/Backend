@@ -53,4 +53,5 @@ func (h *AuthHandler) StartTokenCleanup(ctx context.Context) {
 func invalidateUserCache(userID string) {
 	cache.GlobalCache.Delete("user:me:" + userID)
 	cache.GlobalCache.Delete("user:prefs:" + userID)
+	cache.GlobalCache.Delete("user:favorites:" + userID)
 }
