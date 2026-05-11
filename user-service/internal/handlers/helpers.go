@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/farildzaky/user-service/internal/db"
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ func toUserProfile(row db.CreateUserRow) UserProfile {
 		NIK:       row.Nik,
 		Role:      string(row.Role),
 		IsActive:  row.IsActive,
+		UpdatedAt: row.UpdatedAt.Time.UTC().Format(time.RFC3339),
 	}
 	if row.Address.Valid {
 		p.Address = row.Address.String
@@ -65,6 +67,7 @@ func toUserProfileFromUser(u db.User) UserProfile {
 		NIK:       u.Nik,
 		Role:      string(u.Role),
 		IsActive:  u.IsActive,
+		UpdatedAt: u.UpdatedAt.Time.UTC().Format(time.RFC3339),
 	}
 	if u.Address.Valid {
 		p.Address = u.Address.String
@@ -88,6 +91,7 @@ func toUserProfileFromAuthRow(u db.GetUserByEmailForAuthRow) UserProfile {
 		NIK:       u.Nik,
 		Role:      string(u.Role),
 		IsActive:  u.IsActive,
+		UpdatedAt: u.UpdatedAt.Time.UTC().Format(time.RFC3339),
 	}
 	if u.Address.Valid {
 		p.Address = u.Address.String
@@ -111,6 +115,7 @@ func toUserProfileFromIDRow(u db.GetUserByIDRow) UserProfile {
 		NIK:       u.Nik,
 		Role:      string(u.Role),
 		IsActive:  u.IsActive,
+		UpdatedAt: u.UpdatedAt.Time.UTC().Format(time.RFC3339),
 	}
 	if u.Address.Valid {
 		p.Address = u.Address.String
