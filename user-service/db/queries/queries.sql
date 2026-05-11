@@ -56,6 +56,12 @@ RETURNING id, first_name, last_name, email, role, is_active, updated_at;
 -- name: DeactivateUser :exec
 UPDATE users SET is_active = false WHERE id = sqlc.arg('id');
 
+-- name: BumpFavoritesTimestamp :exec
+UPDATE users SET favorites_updated_at = NOW() WHERE id = sqlc.arg('id');
+
+-- name: GetFavoritesUpdatedAt :one
+SELECT favorites_updated_at FROM users WHERE id = sqlc.arg('id');
+
 -- name: ListUsers :many
 SELECT id, first_name, last_name, phone, email, nik, role, is_active, created_at
 FROM users
@@ -146,7 +152,7 @@ WHERE id = sqlc.arg('id');
 -- =============================================================================
 
 -- name: GetUserFavorites :many
-SELECT service_id FROM user_service_favorites
+SELECT service_id, added_at AS updated_at FROM user_service_favorites
 WHERE user_id = sqlc.arg('user_id')
 ORDER BY added_at DESC;
 
