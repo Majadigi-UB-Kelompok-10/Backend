@@ -524,7 +524,8 @@ func (h *AuthHandler) GetFavorites(c fiber.Ctx) error {
 }
 
 // -----------------------------------------------------------------------------
-// POST /api/v1/auth/favorites/:service_id  (requires JWT middleware)
+// POST /api/v1/auth/favorites  (requires JWT middleware)
+// Body: {"service_ids": ["uuid1", "uuid2", ...]}
 // -----------------------------------------------------------------------------
 
 func (h *AuthHandler) AddFavorite(c fiber.Ctx) error {
@@ -535,20 +536,28 @@ func (h *AuthHandler) AddFavorite(c fiber.Ctx) error {
 		return c.Status(401).JSON(ErrorResponse{Code: "ERR_UNAUTHORIZED", Message: "Token tidak valid"})
 	}
 
-	svcID, err := stringToUUID(c.Params("service_id"))
-	if err != nil {
-		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_id tidak valid"})
+	var req struct {
+		ServiceIDs []string `json:"service_ids"`
+	}
+	if err := c.Bind().JSON(&req); err != nil || len(req.ServiceIDs) == 0 {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_ids tidak boleh kosong"})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	if err := h.Queries.AddUserFavorite(ctx, db.AddUserFavoriteParams{
-		UserID:    userID,
-		ServiceID: svcID,
-	}); err != nil {
-		slog.Error("auth.add_favorite.error", slog.String("err", err.Error()))
-		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menambah favorit"})
+	for _, idStr := range req.ServiceIDs {
+		svcID, err := stringToUUID(idStr)
+		if err != nil {
+			return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_id tidak valid: " + idStr})
+		}
+		if err := h.Queries.AddUserFavorite(ctx, db.AddUserFavoriteParams{
+			UserID:    userID,
+			ServiceID: svcID,
+		}); err != nil {
+			slog.Error("auth.add_favorite.error", slog.String("id", idStr), slog.String("err", err.Error()))
+			return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menambah favorit"})
+		}
 	}
 
 	_ = h.Queries.BumpFavoritesTimestamp(ctx, userID)
@@ -558,7 +567,7 @@ func (h *AuthHandler) AddFavorite(c fiber.Ctx) error {
 }
 
 // -----------------------------------------------------------------------------
-// DELETE /api/v1/auth/favorites/:service_id  (requires JWT middleware)
+// DELETE /api/v1/auth/favorites  (requires JWT middleware)
 // -----------------------------------------------------------------------------
 
 func (h *AuthHandler) RemoveFavorite(c fiber.Ctx) error {
@@ -569,20 +578,28 @@ func (h *AuthHandler) RemoveFavorite(c fiber.Ctx) error {
 		return c.Status(401).JSON(ErrorResponse{Code: "ERR_UNAUTHORIZED", Message: "Token tidak valid"})
 	}
 
-	svcID, err := stringToUUID(c.Params("service_id"))
-	if err != nil {
-		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_id tidak valid"})
+	var req struct {
+		ServiceIDs []string `json:"service_ids"`
+	}
+	if err := c.Bind().JSON(&req); err != nil || len(req.ServiceIDs) == 0 {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_ids tidak boleh kosong"})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
 	defer cancel()
 
-	if err := h.Queries.RemoveUserFavorite(ctx, db.RemoveUserFavoriteParams{
-		UserID:    userID,
-		ServiceID: svcID,
-	}); err != nil {
-		slog.Error("auth.remove_favorite.error", slog.String("err", err.Error()))
-		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menghapus favorit"})
+	for _, idStr := range req.ServiceIDs {
+		svcID, err := stringToUUID(idStr)
+		if err != nil {
+			return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION", Message: "service_id tidak valid: " + idStr})
+		}
+		if err := h.Queries.RemoveUserFavorite(ctx, db.RemoveUserFavoriteParams{
+			UserID:    userID,
+			ServiceID: svcID,
+		}); err != nil {
+			slog.Error("auth.remove_favorite.error", slog.String("id", idStr), slog.String("err", err.Error()))
+			return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menghapus favorit"})
+		}
 	}
 
 	_ = h.Queries.BumpFavoritesTimestamp(ctx, userID)
