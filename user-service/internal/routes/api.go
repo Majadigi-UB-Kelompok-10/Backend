@@ -45,8 +45,8 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, jwtSecret string) {
 	me.Get("/preferences", h.GetPreferences)
 	me.Post("/preferences", h.SetPreferences)
 	me.Get("/favorites", h.GetFavorites)
-	me.Post("/favorites/:service_id", h.AddFavorite)
-	me.Delete("/favorites/:service_id", h.RemoveFavorite)
+	me.Post("/favorites", h.AddFavorite)
+	me.Delete("/favorites", h.RemoveFavorite)
 
 	// ---------------------------------------------------------------------------
 	// Admin routes (require admin or superadmin role)
