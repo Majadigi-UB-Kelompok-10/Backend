@@ -88,11 +88,7 @@ jobs:
   build-push:
     name: Build & Push ${{ matrix.service }}
     needs: [detect, build]
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.detect.outputs.services != '[]' &&
-      needs.detect.outputs.services != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,11 +122,7 @@ jobs:
   deploy:
     name: Deploy ${{ matrix.service }}
     needs: [detect, build-push]
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.detect.outputs.services != '[]' &&
-      needs.detect.outputs.services != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
