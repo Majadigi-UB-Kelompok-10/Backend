@@ -153,6 +153,7 @@ jobs:
 
     steps:
       - name: Deploy to Railway
+        continue-on-error: true
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE_NAME: ${{ matrix.service }}
