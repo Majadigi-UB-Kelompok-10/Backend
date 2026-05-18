@@ -52,6 +52,10 @@ func main() {
 	adminHandler := gatewayAdmin.NewGatewayAdminHandler(queries)
 	app.Post("/api/v1/admin/gateway/sync", adminHandler.SyncNow)
 
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "healthy"})
+	})
+
 	routes.SetupPublicRoutes(app, queries)
 	routes.SetupAdminRoutes(app, queries)
 	routes.SetupDynamicEndpoint(app)
