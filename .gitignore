@@ -3,3 +3,4 @@
 
 # Prevent .env.keys being committed
 .env.keys
+docs/
