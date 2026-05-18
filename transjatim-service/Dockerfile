@@ -5,8 +5,8 @@ WORKDIR /build
 RUN apk add --no-cache git make
 
 COPY go.mod go.sum ./
-ENV GONOSUMDB="github.com/Majadigi-UB-Kelompok-10/*"
-ENV GOPROXY="https://proxy.golang.org,direct"
+ENV GONOSUMDB="*"
+ENV GOPROXY="direct"
 RUN go mod download
 
 COPY . .
