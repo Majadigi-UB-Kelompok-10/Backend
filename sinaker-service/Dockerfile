@@ -1,7 +1,7 @@
 # Multi-stage build for production-ready image
 
 # Stage 1: Build
-FROM golang:1.25.7-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 WORKDIR /build
 
