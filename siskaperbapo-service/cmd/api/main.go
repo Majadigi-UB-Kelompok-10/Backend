@@ -397,7 +397,38 @@ func main() {
 		"https://cdn.example.com/siskaperbapo.png",
 		"Sistem Ketersediaan dan Harga Bahan Pokok",
 		[]string{"b1000001-0000-4000-8000-000000000008"}, // Harga Kebutuhan Pokok
-		nil, nil,
+		&registry.OperationalData{
+			ServiceURL: "https://siskaperbapo.jatimprov.go.id/",
+			Address:    "Jl. Siwalankerto Utara II/42 Surabaya",
+			OperationalHour: map[string]string{
+				"Senin":  "24 Jam",
+				"Selasa": "24 Jam",
+				"Rabu":   "24 Jam",
+				"Kamis":  "24 Jam",
+				"Jumat":  "24 Jam",
+				"Sabtu":  "24 Jam",
+				"Minggu": "24 Jam",
+			},
+			SocialMedia: map[string]string{
+				"Instagram": "",
+				"Facebook":  "",
+				"YouTube":   "",
+			},
+		},
+		&registry.PolicyData{
+			Benefit: []string{
+				"Akses informasi harga bahan pokok secara harian dan transparan.",
+				"Pemantauan ketersediaan bahan pokok dengan mudah, kapan saja.",
+				"Mendukung pengendalian inflasi dan menjaga stabilitas harga bahan pokok.",
+			},
+			Instruction: []string{
+				"Akses situs web resmi SISKAPERBAPO",
+				"Telusuri data harga bahan pokok berdasarkan kategori bahan pokok.",
+				"Pilih lokasi atau wilayah kabupaten/kota yang ingin dipantau.",
+				"Lihat grafik tren harga harian dan informasi ketersediaan barang.",
+				"Gunakan fitur perbandingan harga produsen dan konsumen untuk analisis.",
+			},
+		},
 	)
 
 	if cfg.EnablePprof {
