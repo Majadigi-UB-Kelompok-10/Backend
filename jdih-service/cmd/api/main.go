@@ -387,7 +387,60 @@ func main() {
 
 	// Registrasi ke API Gateway
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"jdih",
+			cfg.ServicePublic,
+			"JDIH",
+			"https://placeholder.majadigi.id/jdih.png",
+			"Jaringan Dokumentasi dan Informasi Hukum Jawa Timur",
+			[]string{"b1000001-0000-4000-8000-000000000005"},
+			&registry.OperationalData{
+				ServiceURL: "https://jdih.jatimprov.go.id/",
+				Address:    "Jl. Pahlawan No.110, Alun-alun Contong, Bubutan, Surabaya 60174.",
+				OperationalHour: map[string]string{
+					"Senin":  "08:00 - 16:00",
+					"Selasa": "08:00 - 16:00",
+					"Rabu":   "08:00 - 16:00",
+					"Kamis":  "08:00 - 16:00",
+					"Jumat":  "08:00 - 16:00",
+					"Sabtu":  "08:00 - 16:00",
+					"Minggu": "08:00 - 16:00",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"1. Akses dokumen hukum lebih cepat, akurat, dan efisien.",
+					"2. JDIH menjadi rujukan utama bagi produk hukum pusat dan daerah",
+					"3. Dukung kolaborasi antar lembaga dalam jaringan dokumentasi hukum",
+					"4. Kontribusi nasional: Berkontribusi dalam keterbukaan informasi hukum di tingkat daerah dan nasional.",
+				},
+				Instruction: []string{
+					"Kebijakan Privasi",
+					"JDIH Jatim berkomitmen menjaga kerahasiaan dan melindungi data privasi pengguna mulai dari pengumpulan data, penggunaan, dan menjaga informasi pribadi Anda saat anda menggunakan layanan JDIH Provinsi Jawa Timur.",
+					"Pengumpulan Data",
+					"1. Nama, email, alamat, dan informasi lain yang diisi secara sukarela saat menggunakan layanan JDIH.",
+					"2. Data teknis seperti IP address, jenis browser, halaman yang dikunjungi, dan waktu akses melalui cookie atau teknologi serupa",
+					"Penggunaan Informasi",
+					"1. Peningkatan layanan JDIH Jatim",
+					"2. Memproses permintaan dan pertanyaan pengguna",
+					"3. Meningkatkan pengalaman pengguna di situs laman",
+					"4. Mengirim pembaruan dan info layanan JDIH",
+					"5. Peningkatan layanan melalui analisis dan penelitian",
+					"6. Memenuhi kewajiban hukum dan peraturan yang berlaku.",
+					"Perlindungan Informasi",
+					"1. Kami menggunakan enkripsi, firewall, dan prosedur keamanan lain untuk menjaga kerahasiaan dan integritas data.",
+					"2. Pembagian Informasi",
+					"3. Kami bisa membagikan data pribadi ke pihak ketiga yang membantu operasional JDIH, seperti layanan hosting. Mereka wajib menjaga privasi sama seperti kami. Kami tidak akan membagikan, menjual atau menyewakan data Anda tanpa izin.",
+					"4. Perubahan Kebijakan Privasi. Kebijakan privasi ini bisa berubah sewaktu-waktu. Kami akan mengumumkan perubahan di situs JDIH Jatim, jadi silakan cek halaman ini secara berkala.",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
