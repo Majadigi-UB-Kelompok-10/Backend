@@ -377,7 +377,50 @@ func main() {
 	go sinakerHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"sinaker",
+			cfg.ServicePublic,
+			"SINAKER",
+			"https://placeholder.majadigi.id/sinaker.png",
+			"Sistem Informasi Ketenagakerjaan Jawa Timur",
+			[]string{"b1000001-0000-4000-8000-000000000004"},
+			&registry.OperationalData{
+				ServiceURL: "https://disnakertrans.jatimprov.go.id/sinaker/",
+				Address:    "Jl. Dukuh Menanggal Sel. No.124-126, Dukuh Menanggal, Kec. Gayungan, Surabaya, Jawa Timur 60234",
+				OperationalHour: map[string]string{
+					"Senin":  "07:00 - 15:30",
+					"Selasa": "07:00 - 15:30",
+					"Rabu":   "07:00 - 15:30",
+					"Kamis":  "07:00 - 15:30",
+					"Jumat":  "07:00 - 15:30",
+					"Sabtu":  "07:00 - 15:30",
+					"Minggu": "07:00 - 15:30",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Melalui SiNaker, pengguna bisa:",
+					"1. Temukan lowongan kerja lebih mudah sesuai minat dan keahlian",
+					"2. Upgrade skill lewat fitur pelatihan dan sertifikasi uji kompetensi",
+					"3. Urus perizinan dan pengawasan ketenagakerjaan bagi perusahaan",
+					"4. Layanan pengaduan untuk perlindungan tenaga kerja.",
+				},
+				Instruction: []string{
+					"1. Kunjungi laman Disnakertrans Jatim untuk akses Pelatihan dan Profil Kelembagaan UPT BLK",
+					"2. Lihat daftar UPT BLK di menu Balai Latihan Kerja",
+					"3. Pilih UPT BLK Kabupaten / Kota yang dituju, lalu klik tombol daftar pelatihan",
+					"4. Lengkapi formulir data diri pendaftaran dan informasi lain yang dibutuhkan hingga proses selesai",
+					"5. Cek pendaftaran dengan memasukkan NIK dan nomor HP yang didaftarkan",
+					"6. Pantau informasi jadwal dan pengumuman secara berkala di website Disnakertrans Jatim",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
