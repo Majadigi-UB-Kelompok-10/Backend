@@ -379,7 +379,51 @@ func main() {
 	go hoaxHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"klinik",
+			cfg.ServicePublic,
+			"KLINIK HOAKS",
+			"https://placeholder.majadigi.id/klinik.png",
+			"Layanan Verifikasi dan Pelaporan Hoaks",
+			[]string{"b1000001-0000-4000-8000-000000000006"},
+			&registry.OperationalData{
+				ServiceURL: "https://klinikhoaks.jatimprov.go.id/",
+				Address:    "Jl. A. Yani 242 - 244, Gayungan, Surabaya.",
+				OperationalHour: map[string]string{
+					"Senin":  "24 Jam",
+					"Selasa": "24 Jam",
+					"Rabu":   "24 Jam",
+					"Kamis":  "24 Jam",
+					"Jumat":  "24 Jam",
+					"Sabtu":  "24 Jam",
+					"Minggu": "24 Jam",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Membantu masyarakat memverifikasi informasi yang meragukan agar terhindar dari hoaks.",
+					"Melindungi publik dari dampak negatif informasi palsu yang menyesatkan.",
+					"Meningkatkan kesadaran dan literasi digital masyarakat melalui klarifikasi informasi.",
+					"Mendukung terciptanya ruang digital yang sehat dan bebas hoaks.",
+					"Menyediakan akses transparan terhadap hasil verifikasi informasi.",
+				},
+				Instruction: []string{
+					"Prosedur menggunakan situs Klinik Hoaks:",
+					"1. Akses laman https://klinikhoaks.jatimprov.go.id/",
+					"2. Masukkan kata kunci informasi atau berita yang dicari",
+					"3. Sistem akan menampilkan hasil temuan sesuai kata kunci yang dicari, termasuk status dan penjelasannya.",
+					"Jika informasi yang dicari tidak ditemukan, pengguna bisa ajukan permohonan klarifikasi sebagai berikut:",
+					"1. Klik menu di laman Klinik Hoaks",
+					"2. Pilih menu permohonan klarifikasi",
+					"3. Isi formulir data dengan informasi yang diminta, lalu klik tombol kirim.",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
