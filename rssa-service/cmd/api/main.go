@@ -362,7 +362,58 @@ func main() {
 	go rssaHandler.RunCacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "rssa", cfg.ServicePublic, "RS SAIFUL ANWAR", "https://placeholder.majadigi.id/rssa.png", "Rumah Sakit dr. Saiful Anwar Malang", []string{"b1000001-0000-4000-8000-000000000001", "b1000001-0000-4000-8000-000000000010"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"rssa",
+			cfg.ServicePublic,
+			"RS SAIFUL ANWAR",
+			"https://placeholder.majadigi.id/rssa.png",
+			"Rumah Sakit dr. Saiful Anwar Malang",
+			[]string{"b1000001-0000-4000-8000-000000000001", "b1000001-0000-4000-8000-000000000010"},
+			&registry.OperationalData{
+				ServiceURL: "https://rsusaifulanwar.jatimprov.go.id/v2/",
+				Address:    "Jl. Jaksa Agung Suprapto No.2, Klojen, Kec. Klojen, Kota Malang, Jawa Timur 65112",
+				OperationalHour: map[string]string{
+					"Senin":  "07:00 - 13:30",
+					"Selasa": "07:00 - 13:30",
+					"Rabu":   "07:00 - 13:30",
+					"Kamis":  "07:00 - 13:30",
+					"Jumat":  "07:00 - 11:00",
+					"Sabtu":  "Tutup",
+					"Minggu": "Tutup",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Memudahkan pasien mendapatkan layanan rawat jalan dengan jadwal operasional yang jelas.",
+					"Tersedia dua opsi pendaftaran: offline langsung di RS atau online melalui aplikasi, sehingga pasien dapat memilih metode sesuai kebutuhan.",
+					"Mengurangi antrean fisik di rumah sakit karena adanya sistem pengambilan nomor antrean secara online.",
+					"Akses informasi yang mudah melalui website resmi RSSA",
+				},
+				Instruction: []string{
+					"Persyaratan Umum:",
+					"1. Memiliki identitas diri (KTP/SIM/Paspor) atau kartu pasien RSSA.",
+					"2. Untuk pasien BPJS Kesehatan, wajib membawa kartu BPJS dan surat rujukan sesuai ketentuan.",
+					"3. Untuk pasien umum, cukup membawa identitas dan bersedia membayar sesuai tarif yang berlaku.",
+					"4. Pasien harus datang sesuai jadwal dan jam operasional yang ditentukan.",
+					"Sistem dan Mekanisme Pendaftaran Online:",
+					"1. Unduh aplikasi Antrian Poliklinik RSSA atau \"Mobile JKN\" melalui Play Store (Android) atau Apple Store (iOS)",
+					"2. Lakukan registrasi akun dan login",
+					"3. Pilih layanan poliklinik, tanggal kunjungan, dan jam yang diinginkan",
+					"4. Simpan bukti pendaftaran digital (biasanya berupa QR code atau nomor antrean)",
+					"5. Datang ke rumah sakit sesuai jadwal yang telah dipilih untuk verifikasi dan pelayanan",
+					"Prosedur saat Hari Kunjungan untuk Pasien Online:",
+					"1. Datang sesuai waktu yang dipilih di aplikasi",
+					"2. Menuju loket khusus pendaftaran online untuk scan QR code/bukti pendaftaran",
+					"3. Langsung diarahkan menuju poliklinik terkait sesuai jadwal",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
