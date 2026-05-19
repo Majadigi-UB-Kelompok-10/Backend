@@ -356,7 +356,45 @@ func main() {
 	go tjHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"transjatim",
+			cfg.ServicePublic,
+			"TRANSJATIM",
+			"https://placeholder.majadigi.id/transjatim.png",
+			"Transportasi Publik Jawa Timur",
+			[]string{"b1000001-0000-4000-8000-000000000002"},
+			&registry.OperationalData{
+				ServiceURL: "https://dishub.jatimprov.go.id",
+				Address:    "Jl. Johar No. 17, Alun-alun Contong, Kec. Bubutan, Surabaya, Jawa Timur 60174",
+				OperationalHour: map[string]string{
+					"Senin":  "05:00 - 21:00",
+					"Selasa": "05:00 - 21:00",
+					"Rabu":   "05:00 - 21:00",
+					"Kamis":  "05:00 - 21:00",
+					"Jumat":  "05:00 - 21:00",
+					"Sabtu":  "05:00 - 21:00",
+					"Minggu": "05:00 - 21:00",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"TikTok":    "",
+					"X":         "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Memberikan kemudahan kepada Pengguna Transjatim untuk mengakses informasi terupdate terkait layanan Transjatim",
+				},
+				Instruction: []string{
+					"Panduan naik Bus Trans Jatim:",
+					"1. Unduh aplikasi Transjatim Ajaib di Play Store dan App Store.",
+					"2. Tentukan tujuan perjalanan Anda, lalu cek jadwal, rute, dan halte atau shelter terdekat.",
+					"3. Beli tiket melalui aplikasi (e-money) atau secara langsung (uang tunai) saat di lokasi. Anda juga bisa membeli tiket Trans Jatim luxury langsung dari aplikasi. Untuk pembelian langsung di tempat, sebaiknya siapkan uang pas.",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
