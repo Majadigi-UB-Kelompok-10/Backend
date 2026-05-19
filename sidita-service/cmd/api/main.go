@@ -384,7 +384,50 @@ func main() {
 	}()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "sidita", cfg.ServicePublic, "SIDITA", "https://placeholder.majadigi.id/sidita.png", "Sistem Digitalisasi Pariwisata Jawa Timur", []string{"b1000001-0000-4000-8000-000000000009"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"sidita",
+			cfg.ServicePublic,
+			"SIDITA",
+			"https://placeholder.majadigi.id/sidita.png",
+			"Sistem Digitalisasi Pariwisata Jawa Timur",
+			[]string{"b1000001-0000-4000-8000-000000000009"},
+			&registry.OperationalData{
+				ServiceURL: "https://sidita.disbudpar.jatimprov.go.id/",
+				Address:    "Jalan Wisata Menanggal, Dukuh Menanggal, Kec. Gayungan, Kota Surabaya, Provinsi Jawa Timur 60234",
+				OperationalHour: map[string]string{
+					"Senin":  "24 Jam",
+					"Selasa": "24 Jam",
+					"Rabu":   "24 Jam",
+					"Kamis":  "24 Jam",
+					"Jumat":  "24 Jam",
+					"Sabtu":  "24 Jam",
+					"Minggu": "24 Jam",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Aplikasi SIDITA (Sistem Informasi Daya Tarik Wisata) merupakan platform yang menyediakan layanan informasi terkait data kepariwisataan, khususnya di wilayah Jawa Timur. Manfaat yang diperoleh pengguna dari aplikasi ini antara lain:",
+					"1. Data dan informasi valid",
+					"2. Fitur maps dan direction ke destinasi tujuan",
+					"3. Data diperbarui secara real time",
+				},
+				Instruction: []string{
+					"Pengunjung perlu menyiapkan 3 hal ini untuk menikmati layanan 360 East Java Virtual Tour, seperti:",
+					"1. Perangkat elektronik, berupa handphone atau laptop",
+					"2. Koneksi internet stabil",
+					"3. Browser yang update",
+					"Sistem Layanan SIDITA dilengkapi dengan 2 fitur, yaitu:",
+					"1. SIDITA berbasis website untuk memudahkan pengunjung menikmati layanannya tanpa perlu instal aplikasi.",
+					"2. Titik koordinat wisata sebagai panduan perjalanan ke lokasi tujuan",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
