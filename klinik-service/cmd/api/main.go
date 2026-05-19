@@ -379,7 +379,7 @@ func main() {
 	go hoaxHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

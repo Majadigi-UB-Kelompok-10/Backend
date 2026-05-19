@@ -387,7 +387,7 @@ func main() {
 
 	// Registrasi ke API Gateway
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

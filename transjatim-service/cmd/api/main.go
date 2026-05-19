@@ -356,7 +356,7 @@ func main() {
 	go tjHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

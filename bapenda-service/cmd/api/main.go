@@ -363,7 +363,7 @@ func main() {
 	go bapendaHandler.RunCacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

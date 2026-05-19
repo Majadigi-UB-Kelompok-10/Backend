@@ -366,7 +366,7 @@ func main() {
 
 	// Registrasi ke API Gateway
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "bansos", cfg.ServicePublic, "SAPA BANSOS", "https://placeholder.majadigi.id/bansos.png", "Sistem Akses Program Bantuan Sosial", []string{"b1000001-0000-4000-8000-000000000007"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "bansos", cfg.ServicePublic, "SAPA BANSOS", "https://placeholder.majadigi.id/bansos.png", "Sistem Akses Program Bantuan Sosial", []string{"b1000001-0000-4000-8000-000000000007"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

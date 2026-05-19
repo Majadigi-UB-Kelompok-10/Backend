@@ -3,7 +3,7 @@ module github.com/farildzaky/bansos-service
 go 1.26.2
 
 require (
-	github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.6
+	github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.7-0.20260519091230-fdb5db7b975f
 	github.com/bytedance/sonic v1.15.1
 	github.com/gofiber/fiber/v3 v3.1.0
 	github.com/jackc/pgx/v5 v5.9.1

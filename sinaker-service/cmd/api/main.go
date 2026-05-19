@@ -377,7 +377,7 @@ func main() {
 	go sinakerHandler.CacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"})
+		registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"}, nil, nil)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
