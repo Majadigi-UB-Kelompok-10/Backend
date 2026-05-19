@@ -363,7 +363,48 @@ func main() {
 	go bapendaHandler.RunCacheWarmup()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"bapenda",
+			cfg.ServicePublic,
+			"BAPENDA",
+			"https://placeholder.majadigi.id/bapenda.png",
+			"Badan Pendapatan Daerah Jawa Timur",
+			[]string{"b1000001-0000-4000-8000-000000000003"},
+			&registry.OperationalData{
+				ServiceURL: "https://bapenda.jatimprov.go.id/",
+				Address:    "Jl. Manyar Kertoarjo No.1, Manyar Sabrangan, Kec. Mulyorejo, Surabaya, Jawa Timur 60116",
+				OperationalHour: map[string]string{
+					"Senin":  "08:00 - 15:30",
+					"Selasa": "08:00 - 15:30",
+					"Rabu":   "08:00 - 15:30",
+					"Kamis":  "08:00 - 15:30",
+					"Jumat":  "08:00 - 15:30",
+					"Sabtu":  "08:00 - 15:30",
+					"Minggu": "08:00 - 15:30",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Sebagai institusi yang berperan penting dalam pengelolaan Pendapatan Asli Daerah, BAPENDA bertujuan meningkatkan transparansi, akuntabilitas, dan kualitas pengelolaan keuangan di tingkat Provinsi dan Kabupaten/Kota di Jawa Timur",
+				},
+				Instruction: []string{
+					"Cara cek informasi pajak dan nilai jual kendaraan",
+					"1. Kunjungi laman resmi Bapenda Jatim",
+					"2. Cek info pajak kendaraan bermotor di menu Info, lalu pilih info PKB",
+					"3. Masukkan plat nomor kendaraan",
+					"4. Masukkan 5 digit terakhir nomor rangka",
+					"5. Untuk mengetahui info nilai jual kendaraan, klik info besar PKB dan BBN di menu info. Isi data yang diminta, lalu klik submit",
+					"Pembayaran Pajak Kendaraan Bermotor (PKB) tahunan bisa dilakukan di Kantor Bersama Samsat atau melalui E-Samsat. Aplikasi E-Samsat merupakan sistem pembayaran Pajak Kendaraan Bermotor (PKB), Sumbangan Wajib Dana Kecelakaan Lalu Lintas Jalan (SWDKLLJ), dan/atau Parkir Berlangganan tahunan.",
+					"Pembayaran E-Samsat bisa melalui marketplace, e-wallet, serta Payment Poin Online Bank (PPOB), seperti Indomaret, Alfamart, Alfamidi, Kantor Pos, Agen Badan Usaha Milik Desa (BUMDes/Samsat Bunda), Samsat One Pesantren One Produk (OPOP), Samsat Kampus, dan sebagainya.",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
