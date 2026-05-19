@@ -366,7 +366,50 @@ func main() {
 
 	// Registrasi ke API Gateway
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "bansos", cfg.ServicePublic, "SAPA BANSOS", "https://placeholder.majadigi.id/bansos.png", "Sistem Akses Program Bantuan Sosial", []string{"b1000001-0000-4000-8000-000000000007"}, nil, nil)
+		registry.AutoRegisterFull(
+			cfg.GatewayDBURL,
+			"bansos",
+			cfg.ServicePublic,
+			"SAPA BANSOS",
+			"https://placeholder.majadigi.id/bansos.png",
+			"Sistem Akses Program Bantuan Sosial",
+			[]string{"b1000001-0000-4000-8000-000000000007"},
+			&registry.OperationalData{
+				ServiceURL: "https://sapabansos.dinsos.jatimprov.go.id/",
+				Address:    "Jl. Gayung Kebonsari No.56b, Gayungan, Kec. Gayungan, Kota Surabaya, Jawa Timur 60235",
+				OperationalHour: map[string]string{
+					"Senin":  "24 Jam",
+					"Selasa": "24 Jam",
+					"Rabu":   "24 Jam",
+					"Kamis":  "24 Jam",
+					"Jumat":  "24 Jam",
+					"Sabtu":  "24 Jam",
+					"Minggu": "24 Jam",
+				},
+				SocialMedia: map[string]string{
+					"Instagram": "",
+					"Facebook":  "",
+					"YouTube":   "",
+				},
+			},
+			&registry.PolicyData{
+				Benefit: []string{
+					"Sapa Bansos memudahkan warga Jatim mengakses info program bansos, jadwal pencairan, dan daftar penerima dana secara real-time, transparan, dan akuntabel.",
+				},
+				Instruction: []string{
+					"Persyaratan",
+					"1. Penerima bansos terdaftar dalam Data Terpadu Kesejahteraan Sosial (DTKS)",
+					"2. Penerima bansos memenuhi kriteria sosial ekonomi tertentu seperti keluarga miskin atau rentan miskin, lanjut usia, dan penyandang disabilitas berat.",
+					"3. Punya Nomor Induk Kependudukan (NIK) yang valid untuk validasi data penerima.",
+					"4. Tidak berstatus sebagai Aparatur Sipil Negara (ASN), TNI, atau Polri.",
+					"Cek Bansos lewat Sapa Bansos",
+					"1. Akses layanan Sapa Bansos melalui aplikasi Majadigi",
+					"2. Pilih layanan Info Bansos",
+					"3. Masukkan NIK untuk cek data penerima bansos",
+					"4. Pilih informasi program untuk info detail rekapitulasi penyaluran tiap program bansos.",
+				},
+			},
+		)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 
