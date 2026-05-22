@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 	"github.com/bytedance/sonic"
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v3"
@@ -28,8 +29,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
-
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/jdih-service/internal/cache"
 	"github.com/farildzaky/jdih-service/internal/db"
@@ -386,10 +385,10 @@ func main() {
 	go jdihHandler.CacheWarmup()
 
 	// Registrasi ke API Gateway
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "jdih", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

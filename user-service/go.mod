@@ -3,7 +3,7 @@ module github.com/farildzaky/user-service
 go 1.26.2
 
 require (
-	github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.6-0.20260419040801-2dd51f67b3f3
+	github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.8
 	github.com/bytedance/sonic v1.15.1
 	github.com/gofiber/fiber/v3 v3.1.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -11,6 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.18.0
+	github.com/sendgrid/sendgrid-go v3.16.1+incompatible
 	golang.org/x/crypto v0.50.0
 )
 
@@ -32,7 +33,6 @@ require (
 	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/sendgrid/rest v2.6.9+incompatible // indirect
-	github.com/sendgrid/sendgrid-go v3.16.1+incompatible // indirect
 	github.com/tinylib/msgp v1.6.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

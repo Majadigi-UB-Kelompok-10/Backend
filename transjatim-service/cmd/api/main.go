@@ -28,7 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/transjatim-service/internal/cache"
 	"github.com/farildzaky/transjatim-service/internal/db"
@@ -355,10 +355,10 @@ func main() {
 
 	go tjHandler.CacheWarmup()
 
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

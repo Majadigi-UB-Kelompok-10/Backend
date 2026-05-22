@@ -30,7 +30,7 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/sinaker-service/internal/cache"
 	"github.com/farildzaky/sinaker-service/internal/db"
@@ -374,10 +374,10 @@ func main() {
 
 	go sinakerHandler.CacheWarmup()
 
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

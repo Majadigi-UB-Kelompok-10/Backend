@@ -30,7 +30,7 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/siskaperbapo-service/internal/cache"
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
@@ -389,15 +389,10 @@ func main() {
 		siskaperbapoHandler.CacheWarmup()
 	}()
 
-	// registry.AutoRegisterFull(
-	//     cfg.GatewayDBURL,
-	//     "siskaperbapo",
-	//     cfg.ServicePublic,
-	//     "SISKAPERBAPO",
-	//     "https://cdn.example.com/siskaperbapo.png",
-	//     "Sistem Ketersediaan dan Harga Bahan Pokok",
-	//     []string{"b1000001-0000-4000-8000-000000000008"}, // Harga Kebutuhan Pokok
-	// )
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "siskaperbapo", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

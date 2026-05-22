@@ -28,7 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/bapenda-service/internal/cache"
 	"github.com/farildzaky/bapenda-service/internal/db"
@@ -361,10 +361,10 @@ func main() {
 
 	go bapendaHandler.RunCacheWarmup()
 
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

@@ -30,7 +30,7 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
@@ -377,10 +377,10 @@ func main() {
 
 	go hoaxHandler.CacheWarmup()
 
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "klinik", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

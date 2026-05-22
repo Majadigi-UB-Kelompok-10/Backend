@@ -1,5 +1,5 @@
-github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.6-0.20260419040801-2dd51f67b3f3 h1:XpYkyD7hANhEy/R6G+9eUg/fZae3aMwqoweiL2eW0qQ=
-github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.6-0.20260419040801-2dd51f67b3f3/go.mod h1:wPEBtLg1m2gDdOJ4wIhYeE9fvRyKH0kn1+GOQxnmoeU=
+github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.8 h1:0bKBgx+v+AGmdfyxgQR2q8MokMudGK5lTjAU64ZUDds=
+github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared v1.0.8/go.mod h1:wPEBtLg1m2gDdOJ4wIhYeE9fvRyKH0kn1+GOQxnmoeU=
 github.com/andybalholm/brotli v1.2.1 h1:R+f5xP285VArJDRgowrfb9DqL18yVK0gKAW/F+eTWro=
 github.com/andybalholm/brotli v1.2.1/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

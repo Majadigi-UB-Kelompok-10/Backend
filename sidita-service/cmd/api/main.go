@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof" 
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -38,7 +38,6 @@ import (
 	"github.com/farildzaky/sidita-service/internal/routes"
 )
 
-
 var (
 	serviceName = "sidita-service"
 	version     = "dev"
@@ -46,7 +45,6 @@ var (
 	buildTime   = "unknown"
 	startedAt   = time.Now()
 )
-
 
 type Config struct {
 	Port            string
@@ -356,14 +354,14 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
@@ -377,14 +375,14 @@ func main() {
 	slog.Info("routes terkonfigurasi")
 
 	go func() {
-		time.Sleep(1 * time.Second) 
+		time.Sleep(1 * time.Second)
 		destinasiHandler.CacheWarmup()
 		hotelHandler.CacheWarmup()
 		eventHandler.CacheWarmup()
 	}()
 
 	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "sidita", cfg.ServicePublic, "SIDITA", "https://placeholder.majadigi.id/sidita.png", "Sistem Digitalisasi Pariwisata Jawa Timur", []string{"b1000001-0000-4000-8000-000000000009"})
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "sidita", cfg.ServicePublic)
 		slog.Info("auto-register ke gateway selesai")
 	}()
 

@@ -28,7 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/rssa-service/internal/cache"
 	"github.com/farildzaky/rssa-service/internal/db"
@@ -361,10 +361,10 @@ func main() {
 
 	go rssaHandler.RunCacheWarmup()
 
-	// go func() {
-	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "rssa", cfg.ServicePublic, "RS SAIFUL ANWAR", "https://placeholder.majadigi.id/rssa.png", "Rumah Sakit dr. Saiful Anwar Malang", []string{"b1000001-0000-4000-8000-000000000001", "b1000001-0000-4000-8000-000000000010"})
-	// 	slog.Info("auto-register ke gateway selesai")
-	// }()
+	go func() {
+		registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "rssa", cfg.ServicePublic)
+		slog.Info("auto-register ke gateway selesai")
+	}()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
