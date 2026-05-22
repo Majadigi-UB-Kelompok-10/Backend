@@ -239,13 +239,13 @@ VALUES
     '94b02f22-9c4d-461a-883b-046b78975d5c', 
     '776d2206-2b78-4857-9494-523b6de049cf', 
     'Info Pajak Kendaraan Bermotor', 
-    ''
+    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp'
 ),
 (
     '94b02f22-9c4d-461a-883b-046b78975d5c', 
     'a03b781a-b8a2-4a5b-847e-b777a0ff5d35', 
     'Info Nilai Jual Kendaraan Bermotor', 
-    ''
+    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp'
 ),
 (
     '324f2278-f7b8-4680-bfdc-17015673006a', 

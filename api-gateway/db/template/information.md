@@ -92,12 +92,12 @@
     - service_list_id: "${BAPENDA_UUID}"
     - endpoint_list_id: "${PKB_UUID}"
     - title: "Info Pajak Kendaraan Bermotor"
-    - icon_url: ""
+    - icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp"
   - integration_list_id:
     - service_list_id: "${BAPENDA_UUID}"
     - endpoint_list_id: "${NJKB_UUID}"
     - title: "Info Nilai Jual Kendaraan Bermotor"
-    - icon_url: ""
+    - icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp"
 - operational:
   - operational_list_id:
     - service_list_id: "${BAPENDA_UUID}"
