@@ -23,23 +23,30 @@ func (q *Queries) CountServices(ctx context.Context) (int64, error) {
 }
 
 const createService = `-- name: CreateService :one
-INSERT INTO service_list (title, description, icon_url)
-VALUES ($1, $2, $3)
-RETURNING service_list_id, title, description, icon_url, created_at
+INSERT INTO service_list (title, long_title, description, icon_url)
+VALUES ($1, $2, $3, $4)
+RETURNING service_list_id, title, long_title, description, icon_url, created_at
 `
 
 type CreateServiceParams struct {
 	Title       string
+	LongTitle   pgtype.Text
 	Description pgtype.Text
 	IconUrl     string
 }
 
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (ServiceList, error) {
-	row := q.db.QueryRow(ctx, createService, arg.Title, arg.Description, arg.IconUrl)
+	row := q.db.QueryRow(ctx, createService,
+		arg.Title,
+		arg.LongTitle,
+		arg.Description,
+		arg.IconUrl,
+	)
 	var i ServiceList
 	err := row.Scan(
 		&i.ServiceListID,
 		&i.Title,
+		&i.LongTitle,
 		&i.Description,
 		&i.IconUrl,
 		&i.CreatedAt,
@@ -58,7 +65,7 @@ func (q *Queries) DeleteService(ctx context.Context, serviceListID pgtype.UUID) 
 }
 
 const getAllServices = `-- name: GetAllServices :many
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+SELECT service_list_id, title, long_title, description, icon_url, created_at FROM service_list
 ORDER BY created_at DESC
 `
 
@@ -74,6 +81,7 @@ func (q *Queries) GetAllServices(ctx context.Context) ([]ServiceList, error) {
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CreatedAt,
@@ -89,7 +97,7 @@ func (q *Queries) GetAllServices(ctx context.Context) ([]ServiceList, error) {
 }
 
 const getServiceById = `-- name: GetServiceById :one
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+SELECT service_list_id, title, long_title, description, icon_url, created_at FROM service_list
 WHERE service_list_id = $1 LIMIT 1
 `
 
@@ -99,6 +107,7 @@ func (q *Queries) GetServiceById(ctx context.Context, serviceListID pgtype.UUID)
 	err := row.Scan(
 		&i.ServiceListID,
 		&i.Title,
+		&i.LongTitle,
 		&i.Description,
 		&i.IconUrl,
 		&i.CreatedAt,
@@ -107,7 +116,7 @@ func (q *Queries) GetServiceById(ctx context.Context, serviceListID pgtype.UUID)
 }
 
 const listServices = `-- name: ListServices :many
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+SELECT service_list_id, title, long_title, description, icon_url, created_at FROM service_list
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -129,6 +138,7 @@ func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]S
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CreatedAt,
@@ -144,7 +154,7 @@ func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]S
 }
 
 const searchServices = `-- name: SearchServices :many
-SELECT service_list_id, title, description, icon_url, created_at FROM service_list
+SELECT service_list_id, title, long_title, description, icon_url, created_at FROM service_list
 WHERE title ILIKE $1
 ORDER BY title ASC
 `
@@ -161,6 +171,7 @@ func (q *Queries) SearchServices(ctx context.Context, title string) ([]ServiceLi
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CreatedAt,
@@ -177,14 +188,15 @@ func (q *Queries) SearchServices(ctx context.Context, title string) ([]ServiceLi
 
 const updateService = `-- name: UpdateService :one
 UPDATE service_list
-SET title = $2, description = $3, icon_url = $4
+SET title = $2, long_title = $3, description = $4, icon_url = $5
 WHERE service_list_id = $1
-RETURNING service_list_id, title, description, icon_url, created_at
+RETURNING service_list_id, title, long_title, description, icon_url, created_at
 `
 
 type UpdateServiceParams struct {
 	ServiceListID pgtype.UUID
 	Title         string
+	LongTitle     pgtype.Text
 	Description   pgtype.Text
 	IconUrl       string
 }
@@ -193,6 +205,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 	row := q.db.QueryRow(ctx, updateService,
 		arg.ServiceListID,
 		arg.Title,
+		arg.LongTitle,
 		arg.Description,
 		arg.IconUrl,
 	)
@@ -200,6 +213,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 	err := row.Scan(
 		&i.ServiceListID,
 		&i.Title,
+		&i.LongTitle,
 		&i.Description,
 		&i.IconUrl,
 		&i.CreatedAt,

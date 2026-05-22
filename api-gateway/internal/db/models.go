@@ -70,6 +70,7 @@ type PolicyList struct {
 type ServiceList struct {
 	ServiceListID pgtype.UUID
 	Title         string
+	LongTitle     pgtype.Text
 	Description   pgtype.Text
 	IconUrl       string
 	CreatedAt     pgtype.Timestamptz

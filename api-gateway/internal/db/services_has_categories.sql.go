@@ -84,7 +84,7 @@ func (q *Queries) ListCategoriesByServiceId(ctx context.Context, serviceListID p
 }
 
 const listServicesByCategories = `-- name: ListServicesByCategories :many
-SELECT DISTINCT s.service_list_id, s.title, s.description, s.icon_url, s.created_at
+SELECT DISTINCT s.service_list_id, s.title, s.long_title, s.description, s.icon_url, s.created_at
 FROM service_list s
 JOIN services_has_categories sc ON s.service_list_id = sc.service_list_id
 WHERE sc.category_list_id = ANY($1::uuid[])
@@ -103,6 +103,7 @@ func (q *Queries) ListServicesByCategories(ctx context.Context, dollar_1 []pgtyp
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CreatedAt,
@@ -118,7 +119,7 @@ func (q *Queries) ListServicesByCategories(ctx context.Context, dollar_1 []pgtyp
 }
 
 const listServicesByCategoryId = `-- name: ListServicesByCategoryId :many
-SELECT s.service_list_id, s.title, s.description, s.icon_url, s.created_at FROM service_list s
+SELECT s.service_list_id, s.title, s.long_title, s.description, s.icon_url, s.created_at FROM service_list s
 JOIN services_has_categories sc ON s.service_list_id = sc.service_list_id
 WHERE sc.category_list_id = $1
 `
@@ -135,6 +136,7 @@ func (q *Queries) ListServicesByCategoryId(ctx context.Context, categoryListID p
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CreatedAt,

@@ -27,12 +27,14 @@ func NewServiceHandler(q *db.Queries) *ServiceHandler {
 
 type CreateServiceRequest struct {
 	Title       string `json:"title"`
+	LongTitle   string `json:"long_title"`
 	Description string `json:"description"`
 	IconUrl     string `json:"icon_url"`
 }
 
 type UpdateServiceRequest struct {
 	Title       string `json:"title"`
+	LongTitle   string `json:"long_title"`
 	Description string `json:"description"`
 	IconUrl     string `json:"icon_url"`
 }
@@ -103,8 +105,14 @@ func (h *ServiceHandler) CreateService(c fiber.Ctx) error {
 		desc = pgtype.Text{String: req.Description, Valid: true}
 	}
 
+	longTitle := pgtype.Text{}
+	if req.LongTitle != "" {
+		longTitle = pgtype.Text{String: req.LongTitle, Valid: true}
+	}
+
 	data, err := h.Queries.CreateService(ctx, db.CreateServiceParams{
 		Title:       req.Title,
+		LongTitle:   longTitle,
 		Description: desc,
 		IconUrl:     req.IconUrl,
 	})
@@ -140,9 +148,15 @@ func (h *ServiceHandler) UpdateService(c fiber.Ctx) error {
 		desc = pgtype.Text{String: req.Description, Valid: true}
 	}
 
+	longTitle := pgtype.Text{}
+	if req.LongTitle != "" {
+		longTitle = pgtype.Text{String: req.LongTitle, Valid: true}
+	}
+
 	data, err := h.Queries.UpdateService(ctx, db.UpdateServiceParams{
 		ServiceListID: id,
 		Title:         req.Title,
+		LongTitle:     longTitle,
 		Description:   desc,
 		IconUrl:       req.IconUrl,
 	})

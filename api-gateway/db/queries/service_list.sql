@@ -1,6 +1,6 @@
 -- name: CreateService :one
-INSERT INTO service_list (title, description, icon_url)
-VALUES ($1, $2, $3)
+INSERT INTO service_list (title, long_title, description, icon_url)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetServiceById :one
@@ -19,7 +19,7 @@ ORDER BY title ASC;
 
 -- name: UpdateService :one
 UPDATE service_list
-SET title = $2, description = $3, icon_url = $4
+SET title = $2, long_title = $3, description = $4, icon_url = $5
 WHERE service_list_id = $1
 RETURNING *;
 

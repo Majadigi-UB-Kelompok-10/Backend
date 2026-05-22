@@ -15,6 +15,7 @@ const getAllNormalizedServiceCategory = `-- name: GetAllNormalizedServiceCategor
 SELECT
     sl.service_list_id,
     sl.title,
+    sl.long_title,
     sl.description,
     sl.icon_url,
     array_agg(cl.category_list_id::text) FILTER (WHERE cl.category_list_id IS NOT NULL) AS category_ids,
@@ -22,13 +23,14 @@ SELECT
 FROM service_list sl
 LEFT JOIN services_has_categories shc ON sl.service_list_id = shc.service_list_id
 LEFT JOIN category_list cl ON shc.category_list_id = cl.category_list_id
-GROUP BY sl.service_list_id, sl.title, sl.description, sl.icon_url, sl.created_at
+GROUP BY sl.service_list_id, sl.title, sl.long_title, sl.description, sl.icon_url, sl.created_at
 ORDER BY sl.created_at DESC
 `
 
 type GetAllNormalizedServiceCategoryRow struct {
 	ServiceListID pgtype.UUID
 	Title         string
+	LongTitle     pgtype.Text
 	Description   pgtype.Text
 	IconUrl       string
 	CategoryIds   interface{}
@@ -47,6 +49,7 @@ func (q *Queries) GetAllNormalizedServiceCategory(ctx context.Context) ([]GetAll
 		if err := rows.Scan(
 			&i.ServiceListID,
 			&i.Title,
+			&i.LongTitle,
 			&i.Description,
 			&i.IconUrl,
 			&i.CategoryIds,
@@ -66,6 +69,7 @@ const getNormalizedServiceCategoryById = `-- name: GetNormalizedServiceCategoryB
 SELECT
     sl.service_list_id,
     sl.title,
+    sl.long_title,
     sl.description,
     sl.icon_url,
     array_agg(cl.category_list_id::text) FILTER (WHERE cl.category_list_id IS NOT NULL) AS category_ids,
@@ -74,12 +78,13 @@ FROM service_list sl
 LEFT JOIN services_has_categories shc ON sl.service_list_id = shc.service_list_id
 LEFT JOIN category_list cl ON shc.category_list_id = cl.category_list_id
 WHERE sl.service_list_id = $1
-GROUP BY sl.service_list_id, sl.title, sl.description, sl.icon_url, sl.created_at
+GROUP BY sl.service_list_id, sl.title, sl.long_title, sl.description, sl.icon_url, sl.created_at
 `
 
 type GetNormalizedServiceCategoryByIdRow struct {
 	ServiceListID pgtype.UUID
 	Title         string
+	LongTitle     pgtype.Text
 	Description   pgtype.Text
 	IconUrl       string
 	CategoryIds   interface{}
@@ -92,6 +97,7 @@ func (q *Queries) GetNormalizedServiceCategoryById(ctx context.Context, serviceL
 	err := row.Scan(
 		&i.ServiceListID,
 		&i.Title,
+		&i.LongTitle,
 		&i.Description,
 		&i.IconUrl,
 		&i.CategoryIds,

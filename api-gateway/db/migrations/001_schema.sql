@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS "public"."service_list" (
     "service_list_id"   "uuid"                      DEFAULT "gen_random_uuid"() NOT NULL,
     "title"             "text"                      UNIQUE                      NOT NULL,
+    "long_title"        "text"                      UNIQUE                              ,
     "description"       "text"                                                          ,
     "icon_url"          "text"                                                  NOT NULL,
     "created_at"        timestamp with time zone    DEFAULT "now"()             NOT NULL
