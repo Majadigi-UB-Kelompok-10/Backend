@@ -53,6 +53,8 @@ services:
       - SENDGRID_SENDER_EMAIL=${SENDGRID_SENDER_EMAIL}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       sinaker-db:
         condition: service_healthy
@@ -65,5 +67,5 @@ services:
 volumes:
   sinaker-postgres-data:
   sinaker-redis-data:
-
-
+  go-mod-cache:
+  go-build-cache:

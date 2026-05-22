@@ -52,6 +52,8 @@ services:
       - SERVICE_PUBLIC_URL=${SERVICE_PUBLIC_URL}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       transjatim-db:
         condition: service_healthy
@@ -64,5 +66,5 @@ services:
 volumes:
   transjatim-postgres-data:
   transjatim-redis-data:
-
-
+  go-mod-cache:
+  go-build-cache:

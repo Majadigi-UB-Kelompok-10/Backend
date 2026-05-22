@@ -55,6 +55,8 @@ services:
       - SENDGRID_SENDER_EMAIL=${SENDGRID_SENDER_EMAIL}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       user-db:
         condition: service_healthy
@@ -67,5 +69,5 @@ services:
 volumes:
   user-postgres-data:
   user-redis-data:
-
-
+  go-mod-cache:
+  go-build-cache:

@@ -52,6 +52,8 @@ services:
       - GATEWAY_DATABASE_URL=${GATEWAY_DATABASE_URL}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       rssa-db:
         condition: service_healthy
@@ -64,4 +66,5 @@ services:
 volumes:
   rssa-postgres-data:
   rssa-redis-data:
-
+  go-mod-cache:
+  go-build-cache:

@@ -13,7 +13,7 @@ COPY go.mod go.sum ./
 
 # Download dependencies
 ENV GONOSUMDB="*"
-ENV GOPROXY="direct"
+ENV GOPROXY="https://proxy.golang.org,direct"
 RUN go mod download
 
 # Copy source code
