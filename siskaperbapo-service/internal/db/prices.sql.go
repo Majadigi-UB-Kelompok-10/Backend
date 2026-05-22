@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkBahanPokokNamaExists = `-- name: CheckBahanPokokNamaExists :one
+SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1)) AS "exists"
+`
+
+func (q *Queries) CheckBahanPokokNamaExists(ctx context.Context, lower string) (bool, error) {
+	row := q.db.QueryRow(ctx, checkBahanPokokNamaExists, lower)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkBahanPokokNamaExistsExcluding = `-- name: CheckBahanPokokNamaExistsExcluding :one
+SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1) AND id != $2) AS "exists"
+`
+
+type CheckBahanPokokNamaExistsExcludingParams struct {
+	Lower string
+	ID    int32
+}
+
+func (q *Queries) CheckBahanPokokNamaExistsExcluding(ctx context.Context, arg CheckBahanPokokNamaExistsExcludingParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkBahanPokokNamaExistsExcluding, arg.Lower, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const countBahanPokok = `-- name: CountBahanPokok :one
 SELECT COUNT(id) 
 FROM bahan_pokok
@@ -581,29 +608,4 @@ func (q *Queries) UpsertHargaHarian(ctx context.Context, arg UpsertHargaHarianPa
 		&i.Tanggal,
 	)
 	return i, err
-}
-
-const checkBahanPokokNamaExists = `-- name: CheckBahanPokokNamaExists :one
-SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1)) AS "exists"`
-
-func (q *Queries) CheckBahanPokokNamaExists(ctx context.Context, nama string) (bool, error) {
-	row := q.db.QueryRow(ctx, checkBahanPokokNamaExists, nama)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-type CheckBahanPokokNamaExistsExcludingParams struct {
-	Nama string `json:"nama"`
-	ID   int32  `json:"id"`
-}
-
-const checkBahanPokokNamaExistsExcluding = `-- name: CheckBahanPokokNamaExistsExcluding :one
-SELECT EXISTS(SELECT 1 FROM bahan_pokok WHERE LOWER(nama) = LOWER($1) AND id != $2) AS "exists"`
-
-func (q *Queries) CheckBahanPokokNamaExistsExcluding(ctx context.Context, arg CheckBahanPokokNamaExistsExcludingParams) (bool, error) {
-	row := q.db.QueryRow(ctx, checkBahanPokokNamaExistsExcluding, arg.Nama, arg.ID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }

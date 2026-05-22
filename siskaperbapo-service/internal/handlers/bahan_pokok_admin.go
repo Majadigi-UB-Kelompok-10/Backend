@@ -143,8 +143,8 @@ func (h *SiskaperbapoHandler) UpdateBahanPokok(c fiber.Ctx) error {
 
 	if nama != "" && !strings.EqualFold(nama, oldData.Nama) {
 		exists, errCheck := h.Queries.CheckBahanPokokNamaExistsExcluding(ctxDb, db.CheckBahanPokokNamaExistsExcludingParams{
-			Nama: nama,
-			ID:   int32(id),
+			Lower: nama,
+			ID:    int32(id),
 		})
 		if errCheck != nil {
 			slog.Error("admin.bahan_pokok.nama_check_error", slog.String("err", errCheck.Error()))
