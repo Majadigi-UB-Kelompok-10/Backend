@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof" 
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -30,7 +30,7 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/siskaperbapo-service/internal/cache"
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
@@ -66,7 +66,7 @@ type Config struct {
 	DBQueryTimeout time.Duration
 
 	RedisURL      string
-	CloudinaryURL string 
+	CloudinaryURL string
 
 	GatewayDBURL  string
 	ServicePublic string
@@ -250,7 +250,7 @@ func newDBPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 				slog.Duration("duration", duration),
 			}
 			if duration > 500*time.Millisecond {
-				slog.Warn("db.slow_query", attrs...) 
+				slog.Warn("db.slow_query", attrs...)
 			} else {
 				slog.Debug("db.query", attrs...)
 			}
@@ -361,14 +361,14 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
@@ -380,7 +380,7 @@ func main() {
 	hargaWorkerPool := worker.Start(pool)
 
 	siskaperbapoHandler := handlers.NewSiskaperbapoHandler(queries, pool, cld, hargaWorkerPool)
-	
+
 	routes.SetupRoutes(app, siskaperbapoHandler)
 	slog.Info("routes terkonfigurasi")
 
@@ -389,15 +389,15 @@ func main() {
 		siskaperbapoHandler.CacheWarmup()
 	}()
 
-	registry.AutoRegisterFull(                                                                                                                                                                                                          
-      cfg.GatewayDBURL,
-      "siskaperbapo",                                                                                                                                                                                                                 
-      cfg.ServicePublic,
-      "SISKAPERBAPO",                                                                                                                                                                                                                 
-      "https://cdn.example.com/siskaperbapo.png",                                                                                                                                                                                     
-      "Sistem Ketersediaan dan Harga Bahan Pokok",
-      []string{"b1000001-0000-4000-8000-000000000008"}, // Harga Kebutuhan Pokok                                                                                                                                                      
-  )   
+	// registry.AutoRegisterFull(
+	//     cfg.GatewayDBURL,
+	//     "siskaperbapo",
+	//     cfg.ServicePublic,
+	//     "SISKAPERBAPO",
+	//     "https://cdn.example.com/siskaperbapo.png",
+	//     "Sistem Ketersediaan dan Harga Bahan Pokok",
+	//     []string{"b1000001-0000-4000-8000-000000000008"}, // Harga Kebutuhan Pokok
+	// )
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

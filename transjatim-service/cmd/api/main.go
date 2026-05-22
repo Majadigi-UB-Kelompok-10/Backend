@@ -28,7 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/transjatim-service/internal/cache"
 	"github.com/farildzaky/transjatim-service/internal/db"
@@ -334,14 +334,14 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
@@ -349,16 +349,16 @@ func main() {
 
 	queries := db.New(pool)
 	tjHandler := handlers.NewTransJatimHandler(queries)
-	
+
 	routes.SetupRoutes(app, tjHandler)
 	slog.Info("routes terkonfigurasi")
 
 	go tjHandler.CacheWarmup()
 
-	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"})
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "transjatim", cfg.ServicePublic, "TRANSJATIM", "https://placeholder.majadigi.id/transjatim.png", "Transportasi Publik Jawa Timur", []string{"b1000001-0000-4000-8000-000000000002"})
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

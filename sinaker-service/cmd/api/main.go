@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof" 
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -30,12 +30,12 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/sinaker-service/internal/cache"
 	"github.com/farildzaky/sinaker-service/internal/db"
 	"github.com/farildzaky/sinaker-service/internal/handlers"
-	"github.com/farildzaky/sinaker-service/internal/routes" 
+	"github.com/farildzaky/sinaker-service/internal/routes"
 )
 
 var (
@@ -45,7 +45,6 @@ var (
 	buildTime   = "unknown"
 	startedAt   = time.Now()
 )
-
 
 type Config struct {
 	Port            string
@@ -206,7 +205,6 @@ func maskSensitiveData(msg string) string {
 	return masked
 }
 
-
 func setupLogger(cfg *Config) {
 	opts := &slog.HandlerOptions{
 		Level:     cfg.LogLevel,
@@ -337,7 +335,7 @@ func main() {
 		slog.Error("init cache failed", slog.String("error", maskSensitiveData(err.Error())))
 		pool.Close()
 		os.Exit(1)
-    }
+	}
 
 	var cld *cloudinary.Cloudinary
 	if cfg.CloudinaryURL != "" {
@@ -353,33 +351,33 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
 	queries := db.New(pool)
-	
+
 	sinakerHandler := handlers.NewSinakerHandler(queries, pool, cld, cache.GlobalCache)
-	
-	routes.SetupRoutes(app, sinakerHandler) 
-	
+
+	routes.SetupRoutes(app, sinakerHandler)
+
 	slog.Info("routes terkonfigurasi")
 
 	go sinakerHandler.CacheWarmup()
 
-	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"})
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "sinaker", cfg.ServicePublic, "SINAKER", "https://placeholder.majadigi.id/sinaker.png", "Sistem Informasi Ketenagakerjaan Jawa Timur", []string{"b1000001-0000-4000-8000-000000000004"})
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

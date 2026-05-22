@@ -30,7 +30,7 @@ import (
 
 	"github.com/cloudinary/cloudinary-go/v2"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
@@ -38,9 +38,8 @@ import (
 	"github.com/farildzaky/klinik-service/internal/routes"
 )
 
-
 var (
-	serviceName = "klinik-hoaks-service" 
+	serviceName = "klinik-hoaks-service"
 	version     = "dev"
 	commit      = "unknown"
 	buildTime   = "unknown"
@@ -62,8 +61,8 @@ type Config struct {
 	DBMaxIdle      time.Duration
 	DBQueryTimeout time.Duration
 
-	RedisURL       string
-	CloudinaryURL  string 
+	RedisURL      string
+	CloudinaryURL string
 
 	GatewayDBURL  string
 	ServicePublic string
@@ -81,7 +80,7 @@ type Config struct {
 
 func loadConfig() (*Config, error) {
 	cfg := &Config{
-		Port:            getEnv("PORT", "8080"), 
+		Port:            getEnv("PORT", "8080"),
 		Environment:     getEnv("ENVIRONMENT", "production"),
 		ShutdownTimeout: getEnvDuration("SHUTDOWN_TIMEOUT", 25*time.Second),
 
@@ -93,10 +92,10 @@ func loadConfig() (*Config, error) {
 		DBQueryTimeout: getEnvDuration("DB_QUERY_TIMEOUT", 5*time.Second),
 
 		RedisURL:      os.Getenv("REDIS_URL"),
-		CloudinaryURL: os.Getenv("CLOUDINARY_URL"), 
+		CloudinaryURL: os.Getenv("CLOUDINARY_URL"),
 
 		GatewayDBURL:  os.Getenv("GATEWAY_DATABASE_URL"),
-		ServicePublic: getEnv("SERVICE_PUBLIC_URL", "http://klinik-api:8080/api/v1"), 
+		ServicePublic: getEnv("SERVICE_PUBLIC_URL", "http://klinik-api:8080/api/v1"),
 
 		AllowedOrigins: parseList(getEnv("ALLOWED_ORIGINS",
 			"http://localhost:3000,http://localhost:4000,http://localhost:5173")),
@@ -358,30 +357,30 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
 	queries := db.New(pool)
-	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld) 
+	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld)
 	routes.SetupRoutes(app, hoaxHandler)
 	slog.Info("routes terkonfigurasi")
 
 	go hoaxHandler.CacheWarmup()
 
-	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"})
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "klinik", cfg.ServicePublic, "KLINIK HOAKS", "https://placeholder.majadigi.id/klinik.png", "Layanan Verifikasi dan Pelaporan Hoaks", []string{"b1000001-0000-4000-8000-000000000006"})
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

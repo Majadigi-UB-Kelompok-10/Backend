@@ -29,7 +29,7 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/jdih-service/internal/cache"
 	"github.com/farildzaky/jdih-service/internal/db"
@@ -58,7 +58,7 @@ type Config struct {
 	DBQueryTimeout time.Duration
 
 	RedisURL      string
-	CloudinaryURL string 
+	CloudinaryURL string
 
 	GatewayDBURL  string
 	ServicePublic string
@@ -88,14 +88,14 @@ func loadConfig() (*Config, error) {
 		DBQueryTimeout: getEnvDuration("DB_QUERY_TIMEOUT", 5*time.Second),
 
 		RedisURL:      os.Getenv("REDIS_URL"),
-		CloudinaryURL: os.Getenv("CLOUDINARY_URL"), 
+		CloudinaryURL: os.Getenv("CLOUDINARY_URL"),
 
 		GatewayDBURL:  os.Getenv("GATEWAY_DATABASE_URL"),
 		ServicePublic: getEnv("SERVICE_PUBLIC_URL", "http://jdih-api:8080/api/v1"),
 
 		AllowedOrigins: parseList(getEnv("ALLOWED_ORIGINS",
 			"http://localhost:3000,http://localhost:4000,http://localhost:5173")),
-		BodyLimitBytes: getEnvInt("BODY_LIMIT_BYTES", 15*1024*1024), 
+		BodyLimitBytes: getEnvInt("BODY_LIMIT_BYTES", 15*1024*1024),
 
 		RateLimitMax:    getEnvInt("RATE_LIMIT_MAX", 150),
 		RateLimitWindow: getEnvDuration("RATE_LIMIT_WINDOW", time.Minute),
@@ -361,14 +361,14 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
@@ -377,7 +377,7 @@ func main() {
 	// Inisialisasi Handler JDIH dengan Dependency Injection
 	queries := db.New(pool)
 	jdihHandler := handlers.NewJdihHandler(queries, pool, cld, appCache)
-	
+
 	// Setup Rute
 	routes.SetupRoutes(app, jdihHandler)
 	slog.Info("routes terkonfigurasi")
@@ -386,10 +386,10 @@ func main() {
 	go jdihHandler.CacheWarmup()
 
 	// Registrasi ke API Gateway
-	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"})
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "jdih", cfg.ServicePublic, "JDIH", "https://placeholder.majadigi.id/jdih.png", "Jaringan Dokumentasi dan Informasi Hukum Jawa Timur", []string{"b1000001-0000-4000-8000-000000000005"})
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)

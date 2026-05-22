@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	_ "net/http/pprof" 
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -28,14 +28,13 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/joho/godotenv"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 
 	"github.com/farildzaky/bapenda-service/internal/cache"
 	"github.com/farildzaky/bapenda-service/internal/db"
 	"github.com/farildzaky/bapenda-service/internal/handlers"
 	"github.com/farildzaky/bapenda-service/internal/routes"
 )
-
 
 var (
 	serviceName = "bapenda-service"
@@ -50,7 +49,7 @@ var (
 // =============================================================================
 type Config struct {
 	Port            string
-	Environment     string 
+	Environment     string
 	ShutdownTimeout time.Duration
 
 	DatabaseURL    string
@@ -342,14 +341,14 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:               fmt.Sprintf("%s/%s", serviceName, version),
-		JSONEncoder:           sonic.Marshal,
-		JSONDecoder:           sonic.Unmarshal,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          15 * time.Second,
-		IdleTimeout:           60 * time.Second,
-		BodyLimit:             cfg.BodyLimitBytes,
-		ErrorHandler:          globalErrorHandler(cfg),
+		AppName:      fmt.Sprintf("%s/%s", serviceName, version),
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		BodyLimit:    cfg.BodyLimitBytes,
+		ErrorHandler: globalErrorHandler(cfg),
 	})
 
 	registerMiddleware(app, cfg)
@@ -362,10 +361,10 @@ func main() {
 
 	go bapendaHandler.RunCacheWarmup()
 
-	go func() {
-		registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"})
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterFull(cfg.GatewayDBURL, "bapenda", cfg.ServicePublic, "BAPENDA", "https://placeholder.majadigi.id/bapenda.png", "Badan Pendapatan Daerah Jawa Timur", []string{"b1000001-0000-4000-8000-000000000003"})
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
@@ -373,12 +372,12 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-    slog.Info("listening", slog.String("addr", ":"+cfg.Port))
-    if err := app.Listen(":"+cfg.Port, fiber.ListenConfig{
-        DisableStartupMessage: true,
-    }); err != nil {
-        serverErr <- err
-    }
+		slog.Info("listening", slog.String("addr", ":"+cfg.Port))
+		if err := app.Listen(":"+cfg.Port, fiber.ListenConfig{
+			DisableStartupMessage: true,
+		}); err != nil {
+			serverErr <- err
+		}
 	}()
 
 	quit := make(chan os.Signal, 1)
@@ -426,7 +425,6 @@ func registerMiddleware(app *fiber.App, cfg *Config) {
 	app.Use(logger.New(logger.Config{
 		Format: `{"ts":"${time}","level":"info","msg":"http","method":"${method}","path":"${path}","status":${status},"latency":"${latency}","ip":"${ip}","reqid":"${locals:requestid}","ua":"${ua}"}` + "\n",
 	}))
-
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowedOrigins,
@@ -552,8 +550,6 @@ func registerHealthEndpoints(app *fiber.App, pool *pgxpool.Pool) {
 		})
 	})
 }
-	
-	
 
 // =============================================================================
 // PPROF — debug profiling on localhost only

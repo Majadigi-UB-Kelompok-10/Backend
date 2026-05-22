@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
+	// "github.com/Majadigi-UB-Kelompok-10/majadigi-go-shared/shared/registry"
 	"github.com/bytedance/sonic"
 	"github.com/farildzaky/user-service/internal/cache"
 	"github.com/farildzaky/user-service/internal/db"
@@ -356,10 +356,10 @@ func main() {
 	defer cleanupCancel()
 	go authHandler.StartTokenCleanup(cleanupCtx)
 
-	go func() {
-		registry.AutoRegister(cfg.GatewayDBURL, "user", cfg.ServicePublic)
-		slog.Info("auto-register ke gateway selesai")
-	}()
+	// go func() {
+	// 	registry.AutoRegisterEndpointOnly(cfg.GatewayDBURL, "user", cfg.ServicePublic)
+	// 	slog.Info("auto-register ke gateway selesai")
+	// }()
 
 	if cfg.EnablePprof {
 		go startPprofServer(cfg.PprofPort)
