@@ -124,6 +124,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to ghcr.io
         uses: docker/login-action@v3
         with:
@@ -140,6 +143,8 @@ jobs:
           tags: |
             ghcr.io/majadigi-ub-kelompok-10/${{ matrix.service }}:${{ github.sha }}
             ghcr.io/majadigi-ub-kelompok-10/${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
 
   deploy:
     name: Deploy ${{ matrix.service }}
@@ -150,31 +155,13 @@ jobs:
       fail-fast: false
       matrix:
         service: ${{ fromJSON(needs.detect.outputs.services) }}
-    env:
-      HOOK_API_GATEWAY: ${{ secrets.RAILWAY_DEPLOY_HOOK_API_GATEWAY }}
-      HOOK_USER_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_USER_SERVICE }}
-      HOOK_TRANSJATIM_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_TRANSJATIM_SERVICE }}
-      HOOK_BAPENDA_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_BAPENDA_SERVICE }}
-      HOOK_KLINIK_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_KLINIK_SERVICE }}
-      HOOK_RSSA_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_RSSA_SERVICE }}
-      HOOK_SIDITA_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_SIDITA_SERVICE }}
-      HOOK_SISKAPERBAPO_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_SISKAPERBAPO_SERVICE }}
-      HOOK_SINAKER_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_SINAKER_SERVICE }}
-      HOOK_JDIH_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_JDIH_SERVICE }}
-      HOOK_BANSOS_SERVICE: ${{ secrets.RAILWAY_DEPLOY_HOOK_BANSOS_SERVICE }}
 
     steps:
-      - name: Trigger Railway deploy
+      - name: Deploy to Railway
+        continue-on-error: true
         env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE_NAME: ${{ matrix.service }}
         run: |
-          VAR_NAME="HOOK_$(echo "$SERVICE_NAME" | tr '[:lower:]-' '[:upper:]_')"
-          HOOK_URL="${!VAR_NAME}"
-          if [ -z "$HOOK_URL" ]; then
-            echo "ERROR: No deploy hook configured for service: $SERVICE_NAME"
-            echo "Add secret RAILWAY_DEPLOY_HOOK_$(echo "$SERVICE_NAME" | tr '[:lower:]-' '[:upper:]_') to this repo."
-            exit 1
-          fi
-          echo "Deploying $SERVICE_NAME to Railway..."
-          curl --fail --silent --show-error -X POST "$HOOK_URL"
-          echo "Deploy triggered for $SERVICE_NAME"
+          npm install -g @railway/cli --silent
+          railway redeploy --service "$SERVICE_NAME" --yes

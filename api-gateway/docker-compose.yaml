@@ -51,6 +51,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     networks:
       - capstone-global-network
     depends_on:
@@ -62,3 +64,5 @@ services:
 volumes:
   majadigi-gateway-db:
   majadigi-gateway-redis-data:
+  go-mod-cache:
+  go-build-cache:

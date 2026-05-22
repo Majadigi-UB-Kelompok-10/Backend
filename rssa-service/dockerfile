@@ -12,6 +12,8 @@ RUN apk add --no-cache git make
 COPY go.mod go.sum ./
 
 # Download dependencies
+ENV GONOSUMDB="*"
+ENV GOPROXY="https://proxy.golang.org,direct"
 RUN go mod download
 
 # Copy source code

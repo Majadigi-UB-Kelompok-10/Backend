@@ -51,6 +51,8 @@ services:
       - CLOUDINARY_URL=${CLOUDINARY_URL}
     volumes:
       - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       siskaperbapo-db:
         condition: service_healthy
@@ -63,3 +65,5 @@ services:
 volumes:
   siskaperbapo-postgres-data:
   siskaperbapo-redis-data:
+  go-mod-cache:
+  go-build-cache:
