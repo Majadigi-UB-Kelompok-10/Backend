@@ -33,6 +33,7 @@ import (
 	"github.com/farildzaky/jdih-service/internal/cache"
 	"github.com/farildzaky/jdih-service/internal/db"
 	"github.com/farildzaky/jdih-service/internal/handlers"
+	"github.com/farildzaky/jdih-service/internal/notify"
 	"github.com/farildzaky/jdih-service/internal/routes"
 )
 
@@ -374,6 +375,7 @@ func main() {
 	registerHealthEndpoints(app, pool, appCache)
 
 	// Inisialisasi Handler JDIH dengan Dependency Injection
+	notify.Init()
 	queries := db.New(pool)
 	jdihHandler := handlers.NewJdihHandler(queries, pool, cld, appCache)
 
