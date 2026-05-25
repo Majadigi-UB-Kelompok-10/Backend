@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/farildzaky/transjatim-service/internal/db"
+	"github.com/farildzaky/transjatim-service/internal/notify"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
@@ -113,6 +115,9 @@ func (h *TransJatimHandler) CreateJadwal(c fiber.Ctx) error {
 	}
 
 	invalidateJadwalCache()
+	body := fmt.Sprintf("Pukul %s - %s | Hari: %s", req.JamBerangkat, req.JamTiba, formatHariOperasi(req.HariOperasi))
+	notify.ByService("/tiket-transjatim", "Jadwal Baru TransJatim", body, nil)
+	notify.ByService("/rute-transjatim", "Jadwal Baru TransJatim", body, nil)
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Jadwal berhasil ditambahkan",
 		Data: struct {
@@ -157,6 +162,9 @@ func (h *TransJatimHandler) UpdateJadwal(c fiber.Ctx) error {
 	}
 
 	invalidateJadwalCache()
+	bodyUpd := fmt.Sprintf("Jam diperbarui: %s - %s | Hari: %s", req.JamBerangkat, req.JamTiba, formatHariOperasi(req.HariOperasi))
+	notify.ByService("/tiket-transjatim", "Perubahan Jadwal TransJatim", bodyUpd, nil)
+	notify.ByService("/rute-transjatim", "Perubahan Jadwal TransJatim", bodyUpd, nil)
 	return c.JSON(SuccessResponse{Pesan: "Jadwal berhasil diperbarui"})
 }
 
