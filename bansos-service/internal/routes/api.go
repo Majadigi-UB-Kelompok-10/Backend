@@ -80,9 +80,6 @@ func SetupRoutes(app *fiber.App, bansosHandler *handlers.BansosHandler) {
 	// ----------------------------------------------------------
 	admin := api.Group("/admin")
 
-	// Middleware Auth (Opsional, tinggal di-uncomment kalau modul user udah jadi)
-	// admin.Use(middlewares.AuthAdmin)
-
 	// A. Manajemen Program Bansos (PKH, BPNT, dll)
 	admin.Get("/program", bansosHandler.AdminListProgram)
 	admin.Post("/program", strictLimiter, bansosHandler.AdminCreateProgram)
