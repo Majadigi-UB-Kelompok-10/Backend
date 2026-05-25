@@ -1,5 +1,6 @@
 .DS_Store
 **/.DS_Store
+.coverage/
 
 # Prevent .env.keys being committed
 .env.keys
