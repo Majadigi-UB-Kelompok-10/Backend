@@ -10,6 +10,7 @@ import (
 
     "github.com/farildzaky/bapenda-service/internal/cache"
     "github.com/farildzaky/bapenda-service/internal/db"
+    "github.com/farildzaky/bapenda-service/internal/notify"
     "github.com/gofiber/fiber/v3"
     "github.com/jackc/pgx/v5/pgtype"
     "golang.org/x/sync/errgroup"
@@ -131,12 +132,14 @@ func (h *BapendaHandler) CreateInfoPajak(c fiber.Ctx) error {
     }
 
     invalidatePajakCache(req.PlatNomor)
+    notify.ByService("/pajak-kendaraan", "Info Pajak: "+req.Merk+" "+req.Tipe,
+        "Data pajak kendaraan "+req.PlatNomor+" ("+req.Merk+" "+req.Tipe+") telah ditambahkan", nil)
 
     return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
         Data: struct {
             ID string `json:"id"`
         }{
-            ID: res.String(), 
+            ID: res.String(),
         },
     })
 }
@@ -206,6 +209,8 @@ func (h *BapendaHandler) UpdateInfoPajak(c fiber.Ctx) error {
     if strings.ToUpper(strings.ReplaceAll(oldData.PlatNomor, " ", "")) != strings.ToUpper(strings.ReplaceAll(req.PlatNomor, " ", "")) {
         invalidatePajakCache(req.PlatNomor)
     }
+    notify.ByService("/pajak-kendaraan", "Update Pajak: "+req.Merk+" "+req.Tipe,
+        "Data pajak kendaraan "+req.PlatNomor+" ("+req.Merk+" "+req.Tipe+") telah diperbarui", nil)
 
     return c.JSON(SuccessResponse{Pesan: "Data kendaraan terupdate"})
 }
