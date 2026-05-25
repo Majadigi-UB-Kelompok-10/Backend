@@ -33,6 +33,7 @@ import (
 	"github.com/farildzaky/bapenda-service/internal/cache"
 	"github.com/farildzaky/bapenda-service/internal/db"
 	"github.com/farildzaky/bapenda-service/internal/handlers"
+	"github.com/farildzaky/bapenda-service/internal/notify"
 	"github.com/farildzaky/bapenda-service/internal/routes"
 )
 
@@ -354,6 +355,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 	bapendaHandler := handlers.NewBapendaHandler(queries)
 	routes.SetupRoutes(app, bapendaHandler)
