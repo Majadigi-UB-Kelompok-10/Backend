@@ -29,7 +29,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 				t.Errorf("GenerateSlug(%q) = %q does not match slug format", title, slug)
 			}
 
-			// Length check: max 60 + 1 dash + 8 hex = 69 chars
 			if len(slug) > 70 {
 				t.Errorf("GenerateSlug(%q) = %q is too long (%d chars)", title, slug, len(slug))
 			}
@@ -98,5 +97,13 @@ func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
 func BenchmarkGenerateSlug(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = GenerateSlug("Sample Title for Benchmark")
+	}
+}
+
+func TestGenerateSlug_TruncatesLongTitle(t *testing.T) {
+	longTitle := "Ini adalah judul yang sangat panjang sekali melebihi enam puluh karakter batas maksimum yang diizinkan oleh sistem"
+	slug := GenerateSlug(longTitle)
+	if len(slug) > 70 {
+		t.Errorf("GenerateSlug long title produced slug of length %d (max 70): %q", len(slug), slug)
 	}
 }
