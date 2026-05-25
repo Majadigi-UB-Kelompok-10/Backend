@@ -10,16 +10,27 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 )
 
-func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, jwtSecret string) {
+func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, notif *handlers.NotificationHandler, jwtSecret string) {
 	api := app.Group("/api/v1")
 
-	authLimiter := limiter.New(limiter.Config{
-		Max:        20,
+	loginLimiter := limiter.New(limiter.Config{
+		Max:        5,
 		Expiration: 1 * time.Minute,
 		LimitReached: func(c fiber.Ctx) error {
 			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
 				Code:    "ERR_RATE_LIMIT",
-				Message: "Terlalu banyak percobaan, silakan tunggu 1 menit",
+				Message: "Terlalu banyak percobaan login, silakan tunggu 1 menit",
+			})
+		},
+	})
+
+	registerLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+				Code:    "ERR_RATE_LIMIT",
+				Message: "Terlalu banyak percobaan registrasi, silakan tunggu 1 menit",
 			})
 		},
 	})
@@ -32,8 +43,8 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, jwtSecret string) {
 	// Public auth routes
 	// ---------------------------------------------------------------------------
 	auth := api.Group("/auth")
-	auth.Post("/register", authLimiter, h.Register)
-	auth.Post("/login", authLimiter, h.Login)
+	auth.Post("/register", registerLimiter, h.Register)
+	auth.Post("/login", loginLimiter, h.Login)
 	auth.Post("/refresh", h.RefreshToken)
 	auth.Post("/logout", h.Logout)
 	auth.Get("/verify-email", h.VerifyEmail)
@@ -47,6 +58,11 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, jwtSecret string) {
 	me.Get("/favorites", h.GetFavorites)
 	me.Post("/favorites", h.AddFavorite)
 	me.Delete("/favorites", h.RemoveFavorite)
+	me.Post("/device-token", notif.RegisterDeviceToken)
+	me.Delete("/device-token", notif.DeleteDeviceToken)
+	api.Post("/internal/notify", notif.SendNotification)
+	api.Post("/internal/notify-all", notif.SendNotificationAll)
+	api.Post("/internal/notify-by-service", notif.NotifyByService)
 
 	// ---------------------------------------------------------------------------
 	// Admin routes (require admin or superadmin role)
