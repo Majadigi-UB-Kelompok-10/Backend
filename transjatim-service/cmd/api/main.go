@@ -33,6 +33,7 @@ import (
 	"github.com/farildzaky/transjatim-service/internal/cache"
 	"github.com/farildzaky/transjatim-service/internal/db"
 	"github.com/farildzaky/transjatim-service/internal/handlers"
+	"github.com/farildzaky/transjatim-service/internal/notify"
 	"github.com/farildzaky/transjatim-service/internal/routes"
 )
 
@@ -347,6 +348,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 	tjHandler := handlers.NewTransJatimHandler(queries)
 
