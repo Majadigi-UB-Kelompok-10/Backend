@@ -33,6 +33,7 @@ import (
 	"github.com/farildzaky/bansos-service/internal/cache"
 	"github.com/farildzaky/bansos-service/internal/db"
 	"github.com/farildzaky/bansos-service/internal/handlers"
+	"github.com/farildzaky/bansos-service/internal/notify"
 	"github.com/farildzaky/bansos-service/internal/routes"
 )
 
@@ -354,6 +355,7 @@ func main() {
 	registerHealthEndpoints(app, pool, appCache)
 
 	// Inisialisasi Handler Bansos dengan Dependency Injection
+	notify.Init()
 	queries := db.New(pool)
 	bansosHandler := handlers.NewBansosHandler(queries, pool, appCache)
 
