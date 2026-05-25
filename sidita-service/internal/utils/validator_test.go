@@ -4,10 +4,6 @@ import (
 	"testing"
 )
 
-// =============================================================================
-// ValidateEmail
-// =============================================================================
-
 func TestValidateEmail(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -48,10 +44,6 @@ func TestValidateEmail(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidatePhone
-// =============================================================================
-
 func TestValidatePhone(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -69,7 +61,7 @@ func TestValidatePhone(t *testing.T) {
 		{"starts with 09", "091234567890", true},
 		{"starts with 07", "071234567890", true},
 		{"with letters", "08abc1234567", true},
-		{"with spaces preserved as input", "081 234 567 890", false}, 
+		{"with spaces preserved as input", "081 234 567 890", false},
 	}
 
 	for _, tt := range tests {
@@ -84,10 +76,6 @@ func TestValidatePhone(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateURL
-// =============================================================================
 
 func TestValidateURL(t *testing.T) {
 	tests := []struct {
@@ -119,10 +107,6 @@ func TestValidateURL(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateSlug 
-// =============================================================================
 
 func TestValidateSlug(t *testing.T) {
 	tests := []struct {
@@ -158,10 +142,6 @@ func TestValidateSlug(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidateQueryString 
-// =============================================================================
-
 func TestValidateQueryString(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -178,7 +158,7 @@ func TestValidateQueryString(t *testing.T) {
 		{"empty (allowed)", "", 100, false},
 
 		{"too long", "aaaaaaaaaaaaaaaaaaaaa", 10, true},
-		{"only special chars stripped", "!@#$%^", 100, true}, 
+		{"only special chars stripped", "!@#$%^", 100, true},
 	}
 
 	for _, tt := range tests {
@@ -193,10 +173,6 @@ func TestValidateQueryString(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateTextContent
-// =============================================================================
 
 func TestValidateTextContent(t *testing.T) {
 	tests := []struct {
@@ -227,10 +203,6 @@ func TestValidateTextContent(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidatePaginationParams
-// =============================================================================
-
 func TestValidatePaginationParams(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -247,7 +219,7 @@ func TestValidatePaginationParams(t *testing.T) {
 		{"page below 1 falls back", "0", "10", 1, 10, 0},
 		{"negative page falls back", "-1", "10", 1, 10, 0},
 		{"non-numeric falls back to default", "abc", "xyz", 1, 10, 0},
-		{"too large page falls back", "9999999", "10", 1, 10, 0}, 
+		{"too large page falls back", "9999999", "10", 1, 10, 0},
 	}
 
 	for _, tt := range tests {
@@ -265,10 +237,6 @@ func TestValidatePaginationParams(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateImageFilename
-// =============================================================================
 
 func TestValidateImageFilename(t *testing.T) {
 	tests := []struct {
@@ -293,10 +261,6 @@ func TestValidateImageFilename(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Benchmarks
-// =============================================================================
 
 func BenchmarkValidateEmail(b *testing.B) {
 	for i := 0; i < b.N; i++ {
