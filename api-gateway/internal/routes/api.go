@@ -60,7 +60,7 @@ func RefreshEndpoints(ctx context.Context, queries *db.Queries) error {
 func SetupDynamicEndpoint(app *fiber.App) {
 	api := app.Group("/api/v1")
 
-	api.All("/:slug/*", func(c fiber.Ctx) error {
+	proxyHandler := func(c fiber.Ctx) error {
 		slug := c.Params("slug")
 
 		GatewayRegistry.RLock()
@@ -75,25 +75,57 @@ func SetupDynamicEndpoint(app *fiber.App) {
 		}
 
 		extraPath := c.Params("*")
-        if extraPath != "" {
-            targetUrl = targetUrl + "/" + extraPath
-        }
+		if extraPath != "" {
+			targetUrl = targetUrl + "/" + extraPath
+		}
 
-        queryString := string(c.Request().URI().QueryString())
-        if queryString != "" {
-            targetUrl = targetUrl + "?" + queryString
-        }
+		queryString := string(c.Request().URI().QueryString())
+		if queryString != "" {
+			targetUrl = targetUrl + "?" + queryString
+		}
 
-        if err := proxy.Do(c, targetUrl); err != nil {
-            fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
-            return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-                "error":   "Bad Gateway",
-                "message": "Layanan sedang mengalami gangguan.",
-            })
-        }
+		if err := proxy.Do(c, targetUrl); err != nil {
+			fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error":   "Bad Gateway",
+				"message": "Layanan sedang mengalami gangguan.",
+			})
+		}
 
 		return nil
+	}
+
+	// Admin routes: Fiber wildcard * captures only the tail after /admin/, so
+	// "admin/" must be prepended when building the downstream URL.
+	api.All("/:slug/admin/*", middleware.RequireAuth(), middleware.RequireAdmin, func(c fiber.Ctx) error {
+		slug := c.Params("slug")
+		GatewayRegistry.RLock()
+		base, exists := GatewayRegistry.Routes[slug]
+		GatewayRegistry.RUnlock()
+		if !exists {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error":   "Not Found",
+				"message": "Endpoint layanan tidak ditemukan.",
+			})
+		}
+		tail := c.Params("*")
+		targetUrl := base + "/admin"
+		if tail != "" {
+			targetUrl = targetUrl + "/" + tail
+		}
+		if qs := string(c.Request().URI().QueryString()); qs != "" {
+			targetUrl = targetUrl + "?" + qs
+		}
+		if err := proxy.Do(c, targetUrl); err != nil {
+			fmt.Printf("Proxy error untuk slug %s ke %s: %v\n", slug, targetUrl, err)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error":   "Bad Gateway",
+				"message": "Layanan sedang mengalami gangguan.",
+			})
+		}
+		return nil
 	})
+	api.All("/:slug/*", proxyHandler)
 }
 
 // ---------------------------------------------------------------------------
