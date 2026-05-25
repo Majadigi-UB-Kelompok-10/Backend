@@ -33,6 +33,7 @@ import (
 	"github.com/farildzaky/rssa-service/internal/cache"
 	"github.com/farildzaky/rssa-service/internal/db"
 	"github.com/farildzaky/rssa-service/internal/handlers"
+	"github.com/farildzaky/rssa-service/internal/notify"
 	"github.com/farildzaky/rssa-service/internal/routes"
 )
 
@@ -354,6 +355,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 	rssaHandler := handlers.NewRSSAHandler(queries)
 	routes.SetupRoutes(app, rssaHandler)
