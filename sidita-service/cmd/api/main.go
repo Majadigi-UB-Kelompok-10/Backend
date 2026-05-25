@@ -35,6 +35,7 @@ import (
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
 	"github.com/farildzaky/sidita-service/internal/handlers"
+	"github.com/farildzaky/sidita-service/internal/notify"
 	"github.com/farildzaky/sidita-service/internal/routes"
 )
 
@@ -367,6 +368,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 	destinasiHandler := handlers.NewDestinasiHandler(queries, cld)
 	hotelHandler := handlers.NewHotelHandler(queries, cld)
