@@ -36,6 +36,12 @@ func main() {
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
 		BodyLimit:   1 * 1024 * 1024,
+		ProxyHeader: fiber.HeaderXForwardedFor,
+		TrustProxy:  true,
+		TrustProxyConfig: fiber.TrustProxyConfig{
+			Loopback: true,
+			Private:  true,
+		},
 	})
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
