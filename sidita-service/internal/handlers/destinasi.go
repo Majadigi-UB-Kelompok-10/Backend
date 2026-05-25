@@ -12,6 +12,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
+	"github.com/farildzaky/sidita-service/internal/notify"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -460,6 +461,7 @@ func (h *DestinasiHandler) CreateDestinasi(c fiber.Ctx) error {
 	}
 
 	invalidateDestinasiCache(idBaru.ID, slugBaru)
+	notify.ByService("/sidita", "Destinasi Wisata Baru: "+nama, "Destinasi wisata "+nama+" ("+areaName+") kini tersedia. Yuk jelajahi!", nil)
 	slog.Info("admin.destinasi.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
