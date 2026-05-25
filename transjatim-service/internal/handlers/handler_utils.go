@@ -101,6 +101,25 @@ func buildPaginationMeta(page, limit int, total int64) *PaginationMeta {
 	return &PaginationMeta{Page: page, Limit: limit, Total: total}
 }
 
+func formatHariOperasi(mask int16) string {
+	days := []struct {
+		bit  int16
+		name string
+	}{
+		{1, "Sen"}, {2, "Sel"}, {4, "Rab"}, {8, "Kam"}, {16, "Jum"}, {32, "Sab"}, {64, "Min"},
+	}
+	var result []string
+	for _, d := range days {
+		if mask&d.bit != 0 {
+			result = append(result, d.name)
+		}
+	}
+	if len(result) == 0 {
+		return "Setiap hari"
+	}
+	return strings.Join(result, "/")
+}
+
 // dayBitmask converts weekday to hari_operasi bitmask value
 // 1=Sen, 2=Sel, 4=Rab, 8=Kam, 16=Jum, 32=Sab, 64=Min
 func dayBitmask(t time.Time) int16 {
