@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
+	"github.com/farildzaky/siskaperbapo-service/internal/notify"
 	"github.com/farildzaky/siskaperbapo-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -301,6 +303,8 @@ func (h *SiskaperbapoHandler) CreateHargaHarian(c fiber.Ctx) error {
 	}
 
 	invalidateAllBahanCache()
+	notify.ByService("/siskaperbapo", "Update Harga Bahan Pokok",
+		fmt.Sprintf("Harga terbaru: Rp%d dicatat untuk tanggal %s", req.Harga, req.Tanggal), nil)
 
 	slog.Info("admin.harga.upserted", slog.Int("bahan_pokok_id", int(req.BahanPokokID)), slog.String("tanggal", req.Tanggal))
 
