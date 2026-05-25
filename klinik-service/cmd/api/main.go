@@ -35,6 +35,7 @@ import (
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
 	"github.com/farildzaky/klinik-service/internal/handlers"
+	"github.com/farildzaky/klinik-service/internal/notify"
 	"github.com/farildzaky/klinik-service/internal/routes"
 )
 
@@ -370,6 +371,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 	hoaxHandler := handlers.NewHoaxHandler(queries, pool, cld)
 	routes.SetupRoutes(app, hoaxHandler)
