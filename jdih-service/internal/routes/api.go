@@ -86,9 +86,6 @@ func SetupRoutes(app *fiber.App, jdihHandler *handlers.JdihHandler) {
 	// ----------------------------------------------------------
 	admin := api.Group("/admin")
 
-	// Middleware Auth (Opsional, tinggal di-uncomment kalau modul user udah jadi)
-	// admin.Use(middlewares.AuthAdmin)
-
 	// Manajemen Dokumen Hukum
 	admin.Get("/dokumen", jdihHandler.AdminListDokumen)
 	admin.Post("/dokumen", strictLimiter, jdihHandler.AdminCreateDokumen)
