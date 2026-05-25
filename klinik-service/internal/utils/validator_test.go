@@ -4,10 +4,6 @@ import (
 	"testing"
 )
 
-// =============================================================================
-// ValidateEmail
-// =============================================================================
-
 func TestValidateEmail(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -48,10 +44,6 @@ func TestValidateEmail(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidatePhone
-// =============================================================================
-
 func TestValidatePhone(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -66,10 +58,10 @@ func TestValidatePhone(t *testing.T) {
 
 		{"empty", "", true},
 		{"too short", "0812", true},
-		{"starts with 09", "091234567890", true},  // not 08
+		{"starts with 09", "091234567890", true},
 		{"starts with 07", "071234567890", true},
 		{"with letters", "08abc1234567", true},
-		{"with spaces preserved as input", "081 234 567 890", false}, // spaces stripped
+		{"with spaces preserved as input", "081 234 567 890", false},
 	}
 
 	for _, tt := range tests {
@@ -84,10 +76,6 @@ func TestValidatePhone(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateURL
-// =============================================================================
 
 func TestValidateURL(t *testing.T) {
 	tests := []struct {
@@ -120,10 +108,6 @@ func TestValidateURL(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidateUUID
-// =============================================================================
-
 func TestValidateUUID(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -153,18 +137,14 @@ func TestValidateUUID(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidatePaginationParams
-// =============================================================================
-
 func TestValidatePaginationParams(t *testing.T) {
 	tests := []struct {
-		name        string
-		pageStr     string
-		limitStr    string
-		wantPage    int
-		wantLimit   int
-		wantOffset  int
+		name       string
+		pageStr    string
+		limitStr   string
+		wantPage   int
+		wantLimit  int
+		wantOffset int
 	}{
 		{"defaults when empty", "", "", 1, 10, 0},
 		{"valid page 2", "2", "10", 2, 10, 10},
@@ -173,7 +153,7 @@ func TestValidatePaginationParams(t *testing.T) {
 		{"page below 1 falls back", "0", "10", 1, 10, 0},
 		{"negative page falls back", "-1", "10", 1, 10, 0},
 		{"non-numeric falls back to default", "abc", "xyz", 1, 10, 0},
-		{"too large page falls back", "9999999", "10", 1, 10, 0}, // > 6 digit
+		{"too large page falls back", "9999999", "10", 1, 10, 0},
 	}
 
 	for _, tt := range tests {
@@ -191,10 +171,6 @@ func TestValidatePaginationParams(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateImageFilename
-// =============================================================================
 
 func TestValidateImageFilename(t *testing.T) {
 	tests := []struct {
@@ -219,10 +195,6 @@ func TestValidateImageFilename(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Benchmark — make sure validators are fast
-// =============================================================================
 
 func BenchmarkValidateEmail(b *testing.B) {
 	for i := 0; i < b.N; i++ {
