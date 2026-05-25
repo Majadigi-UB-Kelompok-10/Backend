@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/farildzaky/sinaker-service/internal/db"
+	"github.com/farildzaky/sinaker-service/internal/notify"
 	"github.com/farildzaky/sinaker-service/internal/utils"
 )
 
@@ -113,6 +114,7 @@ func (h *SinakerHandler) AdminCreateBLK(c fiber.Ctx) error {
 	}
 
 	h.invalidatePublicCache()
+	notify.ByService("/balai-latihan-kerja", "BLK Baru Tersedia", "BLK "+nama+" di "+req.KabKota+" telah dibuka. Daftar sekarang!", nil)
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Berhasil membuat BLK baru",
