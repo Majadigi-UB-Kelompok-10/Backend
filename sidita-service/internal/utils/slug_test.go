@@ -11,10 +11,6 @@ var (
 	suffixFormat = regexp.MustCompile(`-[a-f0-9]{8}$`)
 )
 
-// =============================================================================
-// Format compliance — hanya huruf kecil, angka, dan dash. --- IGNORE --- 
-// =============================================================================
-
 func TestGenerateSlug_OutputFormat(t *testing.T) {
 	tests := []string{
 		"Pantai Balekambang Indah",
@@ -34,7 +30,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 				t.Errorf("GenerateSlug(%q) = %q does not match slug format", title, slug)
 			}
 
-			// Length check: max 60 base + 1 dash + 8 hex = 69 chars
 			if len(slug) > 70 {
 				t.Errorf("GenerateSlug(%q) = %q is too long (%d chars)", title, slug, len(slug))
 			}
@@ -45,10 +40,6 @@ func TestGenerateSlug_OutputFormat(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Fallback for empty/junk input — sidita pakai prefix "item-"
-// =============================================================================
 
 func TestGenerateSlug_FallbackForEmpty(t *testing.T) {
 	tests := []string{"", "   ", "!!!", "🎉🎉🎉"}
@@ -62,10 +53,6 @@ func TestGenerateSlug_FallbackForEmpty(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// Random suffix 
-// =============================================================================
 
 func TestGenerateSlug_HasRandomSuffix(t *testing.T) {
 	title := "Pantai Balekambang"
@@ -86,10 +73,6 @@ func TestGenerateSlug_HasRandomSuffix(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// No leading/trailing hyphens
-// =============================================================================
-
 func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
 	tests := []string{
 		"---weird---title---",
@@ -108,10 +91,6 @@ func TestGenerateSlug_DoesNotStartWithHyphen(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Max length truncation
-// =============================================================================
-
 func TestGenerateSlug_TruncatesLongTitle(t *testing.T) {
 	veryLongTitle := strings.Repeat("a", 200)
 	slug := GenerateSlug(veryLongTitle)
@@ -124,8 +103,6 @@ func TestGenerateSlug_TruncatesLongTitle(t *testing.T) {
 		t.Errorf("GenerateSlug truncated slug missing hex suffix: %q", slug)
 	}
 }
-
-
 
 func BenchmarkGenerateSlug(b *testing.B) {
 	for i := 0; i < b.N; i++ {
