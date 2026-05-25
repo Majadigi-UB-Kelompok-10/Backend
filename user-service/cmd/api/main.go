@@ -19,6 +19,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/farildzaky/user-service/internal/cache"
 	"github.com/farildzaky/user-service/internal/db"
+	"github.com/farildzaky/user-service/internal/fcm"
 	"github.com/farildzaky/user-service/internal/handlers"
 	"github.com/farildzaky/user-service/internal/routes"
 	"github.com/farildzaky/user-service/internal/utils"
@@ -67,6 +68,9 @@ type Config struct {
 	JWTAccessTTL  time.Duration
 	JWTRefreshTTL time.Duration
 
+	FirebaseCredentials string
+	InternalServiceKey  string
+
 	AllowedOrigins []string
 	BodyLimitBytes int
 
@@ -98,6 +102,9 @@ func loadConfig() (*Config, error) {
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		JWTAccessTTL:  getEnvDuration("JWT_ACCESS_TTL", utils.DefaultAccessTTL),
 		JWTRefreshTTL: getEnvDuration("JWT_REFRESH_TTL", utils.DefaultRefreshTTL),
+
+		FirebaseCredentials: os.Getenv("FIREBASE_CREDENTIALS"),
+		InternalServiceKey:  os.Getenv("INTERNAL_SERVICE_KEY"),
 
 		AllowedOrigins: parseList(getEnv("ALLOWED_ORIGINS",
 			"http://localhost:3000,http://localhost:4000,http://localhost:5173")),
@@ -345,9 +352,14 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	if err := fcm.Init(cfg.FirebaseCredentials); err != nil {
+		slog.Warn("fcm.init.failed", slog.String("error", err.Error()))
+	}
+
 	queries := db.New(pool)
 	authHandler := handlers.NewAuthHandler(queries, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
-	routes.SetupRoutes(app, authHandler, cfg.JWTSecret)
+	notifHandler := handlers.NewNotificationHandler(pool, cfg.InternalServiceKey, cfg.GatewayDBURL)
+	routes.SetupRoutes(app, authHandler, notifHandler, cfg.JWTSecret)
 	slog.Info("routes terkonfigurasi")
 
 	go authHandler.CacheWarmup()
