@@ -12,6 +12,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
+	"github.com/farildzaky/sidita-service/internal/notify"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -421,6 +422,7 @@ func (h *HotelHandler) CreateHotel(c fiber.Ctx) error {
 	}
 
 	invalidateHotelCache(idBaru.ID)
+	notify.ByService("/sidita", "Hotel Baru: "+nama, "Hotel "+nama+" di "+areaName+" kini tersedia. Cek harga dan fasilitas!", nil)
 	slog.Info("admin.hotel.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
