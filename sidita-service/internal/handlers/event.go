@@ -12,6 +12,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/farildzaky/sidita-service/internal/cache"
 	"github.com/farildzaky/sidita-service/internal/db"
+	"github.com/farildzaky/sidita-service/internal/notify"
 	"github.com/farildzaky/sidita-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -536,6 +537,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 	}
 
 	invalidateEventCache(idBaru.ID)
+	notify.ByService("/sidita", "Event Baru: "+nama, "Event "+nama+" di "+areaName+" mulai "+tglMulaiStr+". Jangan sampai terlewat!", nil)
 	slog.Info("admin.event.created", slog.Int("id", int(idBaru.ID)), slog.String("slug", slugBaru))
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
