@@ -4,17 +4,13 @@ import (
 	"testing"
 )
 
-// =============================================================================
-// SanitizeQueryString
-// =============================================================================
-
 func TestSanitizeQueryString(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     string
 		maxLength int
 		wantOk    bool
-		wantClean string 
+		wantClean string
 	}{
 		{"empty input", "", 100, true, ""},
 		{"normal text", "Toyota Avanza", 100, true, "Toyota Avanza"},
@@ -51,10 +47,6 @@ func TestSanitizeQueryString(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ParsePagination
-// =============================================================================
-
 func TestParsePagination(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -71,8 +63,8 @@ func TestParsePagination(t *testing.T) {
 		{"page below 1 falls back", "0", "10", 1, 10, 0},
 		{"negative page falls back", "-1", "10", 1, 10, 0},
 		{"non-numeric falls back", "abc", "xyz", 1, 10, 0},
-		{"too many digits in page", "9999999", "10", 1, 10, 0}, // > maxPageDigits (6)
-		{"too many digits in limit", "1", "9999", 1, 10, 0},    // > maxLimitDigits (3)
+		{"too many digits in page", "9999999", "10", 1, 10, 0},
+		{"too many digits in limit", "1", "9999", 1, 10, 0},
 		{"limit exactly at max", "1", "100", 1, 100, 0},
 	}
 
@@ -92,16 +84,12 @@ func TestParsePagination(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidatePlatNomor — Indonesia plate format
-// =============================================================================
-
 func TestValidatePlatNomor(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
 		wantOk  bool
-		wantOut string 
+		wantOut string
 	}{
 		{"normal plat", "AB1234CD", true, "AB1234CD"},
 		{"with spaces", "AB 1234 CD", true, "AB1234CD"},
@@ -140,10 +128,6 @@ func TestValidatePlatNomor(t *testing.T) {
 		})
 	}
 }
-
-// =============================================================================
-// ValidateNomorRangka — must be exactly 5 alphanumeric chars
-// =============================================================================
 
 func TestValidateNomorRangka(t *testing.T) {
 	tests := []struct {
@@ -189,10 +173,6 @@ func TestValidateNomorRangka(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// SanitizeFilename — defensive filename cleaning
-// =============================================================================
-
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -221,10 +201,6 @@ func TestSanitizeFilename(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// ValidationError implements error interface
-// =============================================================================
-
 func TestValidationError_Error(t *testing.T) {
 	ve := &ValidationError{
 		Field:   "plat_nomor",
@@ -236,10 +212,6 @@ func TestValidationError_Error(t *testing.T) {
 		t.Errorf("Error() = %q, want %q", got, expected)
 	}
 }
-
-// =============================================================================
-// Benchmarks
-// =============================================================================
 
 func BenchmarkValidatePlatNomor(b *testing.B) {
 	for i := 0; i < b.N; i++ {
