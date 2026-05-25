@@ -35,6 +35,7 @@ import (
 	"github.com/farildzaky/sinaker-service/internal/cache"
 	"github.com/farildzaky/sinaker-service/internal/db"
 	"github.com/farildzaky/sinaker-service/internal/handlers"
+	"github.com/farildzaky/sinaker-service/internal/notify"
 	"github.com/farildzaky/sinaker-service/internal/routes"
 )
 
@@ -364,6 +365,7 @@ func main() {
 	registerMiddleware(app, cfg)
 	registerHealthEndpoints(app, pool)
 
+	notify.Init()
 	queries := db.New(pool)
 
 	sinakerHandler := handlers.NewSinakerHandler(queries, pool, cld, cache.GlobalCache)
