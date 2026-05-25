@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/farildzaky/rssa-service/internal/db"
-	"github.com/farildzaky/rssa-service/internal/utils" // NAH INI DIA!
+	"github.com/farildzaky/rssa-service/internal/notify"
+	"github.com/farildzaky/rssa-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -69,6 +70,7 @@ func (h *RSSAHandler) CreateRuanganAdmin(c fiber.Ctx) error {
 
 	// Invalidasi cache publik agar jumlah kamar langsung terupdate!
 	invalidateRuanganCache()
+	notify.ByService("/rssa", "Fasilitas Baru RSSA", "Ruangan baru tersedia: "+req.Nama, nil)
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Data ruangan berhasil ditambahkan",
