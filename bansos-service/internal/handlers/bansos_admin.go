@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/farildzaky/bansos-service/internal/db"
+	"github.com/farildzaky/bansos-service/internal/notify"
 	"github.com/farildzaky/bansos-service/internal/utils"
 )
 
@@ -86,6 +87,8 @@ func (h *BansosHandler) AdminCreateProgram(c fiber.Ctx) error {
 	}
 
 	h.invalidateBansosCache()
+	notify.ByService("/sapabansos", "Program Bansos Baru: "+req.Nama,
+		"Program bantuan sosial \""+req.Nama+"\" kini dibuka. Cek apakah kamu termasuk penerima!", nil)
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{Pesan: "Program bansos berhasil ditambahkan"})
 }
 
