@@ -7,6 +7,7 @@ import (
 
 	"github.com/farildzaky/klinik-service/internal/cache"
 	"github.com/farildzaky/klinik-service/internal/db"
+	"github.com/farildzaky/klinik-service/internal/notify"
 	"github.com/farildzaky/klinik-service/internal/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -328,6 +329,7 @@ func (h *HoaxHandler) ProcessReportAdmin(c fiber.Ctx) error {
 	}
 
 	invalidatePublicCache()
+	notify.ByService("/klinik-hoaks", "Berita Baru: "+title, "Berita edukasi baru telah dipublikasikan. Ketuk untuk membaca selengkapnya.", nil)
 
 	if reporterEmail := c.FormValue("reporter_email"); reporterEmail != "" {
 		reporterName := c.FormValue("reporter_name")
