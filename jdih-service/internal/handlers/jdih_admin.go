@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/farildzaky/jdih-service/internal/db"
+	"github.com/farildzaky/jdih-service/internal/notify"
 	"github.com/farildzaky/jdih-service/internal/utils"
 )
 
@@ -180,6 +181,8 @@ func (h *JdihHandler) AdminCreateDokumen(c fiber.Ctx) error {
 	}
 
 	h.invalidateJdihCache()
+	notify.ByService("/produk-hukum-jawa-timur", "Dokumen Hukum Baru",
+		fmt.Sprintf("%s Tahun %d: %s", strings.ToUpper(jenis), tahun, judul), nil)
 
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Dokumen berhasil dipublikasikan",
@@ -233,5 +236,6 @@ func (h *JdihHandler) AdminCreatePengumuman(c fiber.Ctx) error {
 	}
 
 	h.invalidateJdihCache()
+	notify.ByService("/produk-hukum-jawa-timur", "Pengumuman JDIH", judul, nil)
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{Pesan: "Pengumuman berhasil dipublikasikan"})
 }
