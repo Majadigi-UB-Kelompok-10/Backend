@@ -35,6 +35,7 @@ import (
 	"github.com/farildzaky/siskaperbapo-service/internal/cache"
 	"github.com/farildzaky/siskaperbapo-service/internal/db"
 	"github.com/farildzaky/siskaperbapo-service/internal/handlers"
+	"github.com/farildzaky/siskaperbapo-service/internal/notify"
 	"github.com/farildzaky/siskaperbapo-service/internal/routes"
 	"github.com/farildzaky/siskaperbapo-service/internal/worker"
 )
@@ -379,6 +380,7 @@ func main() {
 	slog.Info("memulai background worker siskaperbapo")
 	hargaWorkerPool := worker.Start(pool)
 
+	notify.Init()
 	siskaperbapoHandler := handlers.NewSiskaperbapoHandler(queries, pool, cld, hargaWorkerPool)
 
 	routes.SetupRoutes(app, siskaperbapoHandler)
