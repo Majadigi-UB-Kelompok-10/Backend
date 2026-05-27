@@ -28,7 +28,6 @@ func SetupRoutes(app *fiber.App, jdihHandler *handlers.JdihHandler) {
 	// RATE LIMITERS
 	// ==========================================================
 	
-	// strictLimiter: Untuk Create/Delete (Admin/Upload PDF)
 	strictLimiter := limiter.New(limiter.Config{
 		Max:        30,
 		Expiration: 1 * time.Minute,
@@ -41,8 +40,7 @@ func SetupRoutes(app *fiber.App, jdihHandler *handlers.JdihHandler) {
 		},
 	})
 
-	// searchLimiter: Untuk Pencarian & List Dokumen (Public)
-	// Sengaja di-set 100 karena JDIH sangat read-heavy (warga sering buka-buka dokumen)
+	
 	searchLimiter := limiter.New(limiter.Config{
 		Max:        100, 
 		Expiration: 1 * time.Minute,
@@ -70,7 +68,11 @@ func SetupRoutes(app *fiber.App, jdihHandler *handlers.JdihHandler) {
 
 	// Homepage
 	public.Get("/pengumuman", jdihHandler.PublicGetPengumuman)
-	
+
+	// Referensi untuk dropdown FE
+	public.Get("/jenis", jdihHandler.PublicGetJenisList)
+	public.Get("/tahun", jdihHandler.PublicGetFilterTahunAll)
+
 	// Pencarian Dokumen
 	public.Get("/search", searchLimiter, jdihHandler.PublicSearchDokumen)
 	
