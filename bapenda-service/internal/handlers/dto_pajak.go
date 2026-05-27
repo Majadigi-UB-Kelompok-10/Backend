@@ -29,6 +29,7 @@ type IdentitasKendaraan struct {
 	PlatNomor   string `json:"plat_nomor"`
 	Merk        string `json:"merk"`
 	Tipe        string `json:"tipe"`
+	Model       string `json:"model"`
 	Warna       string `json:"warna"`
 	TahunBuat   int16  `json:"tahun_buat"`
 	MasaPajak   string `json:"masa_pajak"`
