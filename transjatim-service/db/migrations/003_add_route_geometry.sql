@@ -1,0 +1,1 @@
+ALTER TABLE rute ADD COLUMN IF NOT EXISTS koordinat_rute JSONB;
