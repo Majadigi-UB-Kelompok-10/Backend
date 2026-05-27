@@ -203,6 +203,7 @@ func (h *TransJatimHandler) GetJadwalDetail(c fiber.Ctx) error {
 	g, gCtx := errgroup.WithContext(ctx)
 	var stops []db.GetRuteStopsRow
 	var hargas []db.GetHargaByRuteRow
+	var routeGeometry []byte
 
 	g.Go(func() error {
 		var err error
@@ -216,6 +217,15 @@ func (h *TransJatimHandler) GetJadwalDetail(c fiber.Ctx) error {
 		return err
 	})
 
+	g.Go(func() error {
+		var err error
+		routeGeometry, err = h.Queries.GetRuteGeometry(gCtx, jadwal.RuteID)
+		if err != nil {
+			slog.Debug("public.jadwal.detail.geometry_empty", slog.Int("rute_id", int(jadwal.RuteID)))
+		}
+		return nil // geometry is optional, don't fail the request
+	})
+
 	if err := g.Wait(); err != nil {
 		slog.Error("public.jadwal.detail_error", slog.String("err", err.Error()))
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
@@ -224,9 +234,22 @@ func (h *TransJatimHandler) GetJadwalDetail(c fiber.Ctx) error {
 		})
 	}
 
-	stopNames := make([]string, 0, len(stops))
+	stopItems := make([]StopItem, 0, len(stops))
 	for _, s := range stops {
-		stopNames = append(stopNames, fmt.Sprintf("%s - %s", s.Kota, s.Nama))
+		item := StopItem{
+			Urutan: s.Urutan,
+			Nama:   s.Nama,
+			Kota:   s.Kota,
+		}
+		if s.Lat.Valid {
+			v := s.Lat.Float64
+			item.Lat = &v
+		}
+		if s.Lng.Valid {
+			v := s.Lng.Float64
+			item.Lng = &v
+		}
+		stopItems = append(stopItems, item)
 	}
 
 	hargaItems := make([]HargaItem, 0)
@@ -263,8 +286,9 @@ func (h *TransJatimHandler) GetJadwalDetail(c fiber.Ctx) error {
 		TerminalAsal:   jadwal.TerminalAsalNama,
 		TerminalTujuan: jadwal.TerminalTujuanNama,
 		RuteID:         jadwal.RuteID,
-		Stops:          stopNames,
+		Stops:          stopItems,
 		SemuaHarga:     hargaItems,
+		KoordinatRute:  routeGeometry,
 	}
 
 	res := SuccessResponse{
