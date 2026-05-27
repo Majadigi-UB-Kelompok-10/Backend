@@ -57,6 +57,28 @@ func (h *JdihHandler) PublicGetPengumuman(c fiber.Ctx) error {
 }
 
 // =============================================================================
+// PUBLIC: LIST JENIS DOKUMEN
+// =============================================================================
+
+func (h *JdihHandler) PublicGetJenisList(c fiber.Ctx) error {
+	type JenisItem struct {
+		Value string `json:"value"`
+		Label string `json:"label"`
+	}
+	data := []JenisItem{
+		{Value: "perda", Label: "Peraturan Daerah"},
+		{Value: "pergub", Label: "Peraturan Gubernur"},
+		{Value: "peraturan", Label: "Peraturan"},
+		{Value: "perdes", Label: "Peraturan Desa"},
+		{Value: "sk_gub", Label: "Surat Keputusan Gubernur"},
+		{Value: "instruksi", Label: "Instruksi"},
+		{Value: "se", Label: "Surat Edaran"},
+		{Value: "keputusan", Label: "Keputusan"},
+	}
+	return c.JSON(SuccessResponse{Pesan: "Daftar Jenis Dokumen", Data: data})
+}
+
+// =============================================================================
 // PUBLIC: PENCARIAN GLOBAL (Terbaru & Populer)
 // =============================================================================
 
@@ -221,13 +243,20 @@ func (h *JdihHandler) PublicListDokumenByJenis(c fiber.Ctx) error {
 			return err
 		}
 		for _, row := range data {
+			var sizeKb int32
+			if row.PdfSizeKb.Valid {
+				sizeKb = row.PdfSizeKb.Int32
+			}
 			resData = append(resData, DokumenItemResponse{
 				ID:        row.ID,
-				Jenis:     strings.ToUpper(jenis),
+				Jenis:     jenis,
+				Nomor:     row.Nomor,
+				Tahun:     row.Tahun,
 				Judul:     row.Judul,
 				Tanggal:   row.TanggalPenetapan.Time.Format("02 Jan 2006"),
 				Status:    string(row.Status),
 				PdfUrl:    row.PdfUrl,
+				PdfSizeKb: sizeKb,
 			})
 		}
 		return nil
@@ -278,6 +307,28 @@ func (h *JdihHandler) PublicGetFilterTahun(c fiber.Ctx) error {
 
 	res := SuccessResponse{Pesan: "Filter Tahun", Data: tahunList}
 	return cacheJSON(c, h.Cache, cacheKey, CacheTTLPengumuman, res) // Cache agak lama krn jarang tambah tahun baru
+}
+
+// =============================================================================
+// PUBLIC: FILTER TAHUN GLOBAL (untuk halaman Pencarian)
+// =============================================================================
+
+func (h *JdihHandler) PublicGetFilterTahunAll(c fiber.Ctx) error {
+	cacheKey := "jdih:public:filter_tahun_all"
+	if respondCached(c, h.Cache, cacheKey) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	tahunList, err := h.Queries.GetDistinctTahunAll(ctx)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{Code: "ERR_DB", Message: "Gagal ambil filter tahun"})
+	}
+
+	res := SuccessResponse{Pesan: "Filter Tahun", Data: tahunList}
+	return cacheJSON(c, h.Cache, cacheKey, CacheTTLPengumuman, res)
 }
 
 // =============================================================================
@@ -356,19 +407,37 @@ func mapSearchRowToItemResponse(data interface{}) []DokumenItemResponse {
 	case []db.SearchDokumenTerbaruRow:
 		for _, row := range v {
 			var ringkasan string
-			if row.Ringkasan.Valid { ringkasan = row.Ringkasan.String }
+			if row.Ringkasan.Valid {
+				ringkasan = row.Ringkasan.String
+			}
 			resData = append(resData, DokumenItemResponse{
-				ID: row.ID, Jenis: string(row.Jenis), Judul: row.Judul, Ringkasan: ringkasan,
-				Tanggal: row.TanggalPenetapan.Time.Format("02 Jan 2006"), Status: string(row.Status), JumlahView: row.JumlahView,
+				ID:         row.ID,
+				Jenis:      string(row.Jenis),
+				Nomor:      row.Nomor,
+				Tahun:      row.Tahun,
+				Judul:      row.Judul,
+				Ringkasan:  ringkasan,
+				Tanggal:    row.TanggalPenetapan.Time.Format("02 Jan 2006"),
+				Status:     string(row.Status),
+				JumlahView: row.JumlahView,
 			})
 		}
 	case []db.SearchDokumenPopulerRow:
 		for _, row := range v {
 			var ringkasan string
-			if row.Ringkasan.Valid { ringkasan = row.Ringkasan.String }
+			if row.Ringkasan.Valid {
+				ringkasan = row.Ringkasan.String
+			}
 			resData = append(resData, DokumenItemResponse{
-				ID: row.ID, Jenis: string(row.Jenis), Judul: row.Judul, Ringkasan: ringkasan,
-				Tanggal: row.TanggalPenetapan.Time.Format("02 Jan 2006"), Status: string(row.Status), JumlahView: row.JumlahView,
+				ID:         row.ID,
+				Jenis:      string(row.Jenis),
+				Nomor:      row.Nomor,
+				Tahun:      row.Tahun,
+				Judul:      row.Judul,
+				Ringkasan:  ringkasan,
+				Tanggal:    row.TanggalPenetapan.Time.Format("02 Jan 2006"),
+				Status:     string(row.Status),
+				JumlahView: row.JumlahView,
 			})
 		}
 	}
