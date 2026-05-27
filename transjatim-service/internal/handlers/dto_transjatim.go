@@ -1,5 +1,7 @@
 package handlers
 
+import "encoding/json"
+
 // =====================================================================
 // TERMINAL
 // =====================================================================
@@ -64,19 +66,28 @@ type JadwalSearchItem struct {
 	Harga          int64  `json:"harga"`
 }
 
+type StopItem struct {
+	Urutan int32    `json:"urutan"`
+	Nama   string   `json:"nama"`
+	Kota   string   `json:"kota"`
+	Lat    *float64 `json:"lat,omitempty"`
+	Lng    *float64 `json:"lng,omitempty"`
+}
+
 type JadwalDetailResponse struct {
-	ID             int32       `json:"id"`
-	BusKode        string      `json:"bus_kode"`
-	BusLayanan     string      `json:"bus_layanan"`
-	BusFasilitas   *string     `json:"bus_fasilitas,omitempty"`
-	JamBerangkat   string      `json:"jam_berangkat"`
-	JamTiba        string      `json:"jam_tiba"`
-	DurasiMenit    int32       `json:"durasi_menit"`
-	TerminalAsal   string      `json:"terminal_asal"`
-	TerminalTujuan string      `json:"terminal_tujuan"`
-	RuteID         int32       `json:"rute_id"`
-	Stops          []string    `json:"stops"`
-	SemuaHarga     []HargaItem `json:"semua_harga"`
+	ID             int32           `json:"id"`
+	BusKode        string          `json:"bus_kode"`
+	BusLayanan     string          `json:"bus_layanan"`
+	BusFasilitas   *string         `json:"bus_fasilitas,omitempty"`
+	JamBerangkat   string          `json:"jam_berangkat"`
+	JamTiba        string          `json:"jam_tiba"`
+	DurasiMenit    int32           `json:"durasi_menit"`
+	TerminalAsal   string          `json:"terminal_asal"`
+	TerminalTujuan string          `json:"terminal_tujuan"`
+	RuteID         int32           `json:"rute_id"`
+	Stops          []StopItem      `json:"stops"`
+	SemuaHarga     []HargaItem     `json:"semua_harga"`
+	KoordinatRute  json.RawMessage `json:"koordinat_rute,omitempty"`
 }
 
 type HargaItem struct {
