@@ -14,14 +14,14 @@ import (
 // =====================================================================
 
 type TransJatimHandler struct {
-	Queries *db.Queries
-	// DB    *pgxpool.Pool        // kalau nanti butuh transaksi kompleks (tx)
-	// Cld   *cloudinary.Cloudinary // kalau nanti Trans Jatim butuh upload foto bus
+	Queries   *db.Queries
+	OrsApiKey string
 }
 
-func NewTransJatimHandler(q *db.Queries) *TransJatimHandler {
+func NewTransJatimHandler(q *db.Queries, orsApiKey string) *TransJatimHandler {
 	return &TransJatimHandler{
-		Queries: q,
+		Queries:   q,
+		OrsApiKey: orsApiKey,
 	}
 }
 
