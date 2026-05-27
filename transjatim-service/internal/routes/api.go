@@ -68,6 +68,7 @@ func SetupRoutes(app *fiber.App, h *handlers.TransJatimHandler) {
 	admin.Post("/rute", actionLimiter, h.CreateRute)
 	admin.Put("/rute/:slug", actionLimiter, h.UpdateRute)
 	admin.Patch("/rute/:slug/deactivate", actionLimiter, h.DeactivateRute)
+	admin.Post("/rute/:slug/generate-geometry", actionLimiter, h.AdminGenerateRuteGeometry)
 
 	// 4. JADWAL
 	admin.Get("/jadwal", searchLimiter, h.GetAllJadwalsAdmin)
