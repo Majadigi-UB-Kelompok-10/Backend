@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/farildzaky/transjatim-service/internal/db"
 	"github.com/farildzaky/transjatim-service/internal/utils"
@@ -130,6 +131,8 @@ func (h *TransJatimHandler) CreateRute(c fiber.Ctx) error {
 		}
 	}
 
+	h.triggerGeometryGeneration(res.ID, res.Slug)
+
 	invalidateRuteCache()
 	return c.Status(fiber.StatusCreated).JSON(SuccessResponse{
 		Pesan: "Rute berhasil dibuat",
@@ -210,6 +213,8 @@ func (h *TransJatimHandler) UpdateRute(c fiber.Ctx) error {
 		}
 	}
 
+	h.triggerGeometryGeneration(ruteDb.ID, slugBaru)
+
 	invalidateRuteCache()
 	return c.JSON(SuccessResponse{Pesan: "Rute berhasil diperbarui"})
 }
@@ -225,4 +230,81 @@ func (h *TransJatimHandler) DeactivateRute(c fiber.Ctx) error {
 
 	invalidateRuteCache()
 	return c.JSON(SuccessResponse{Pesan: "Rute berhasil dinonaktifkan"})
+}
+
+// triggerGeometryGeneration fires a background goroutine that calls ORS and stores the polyline.
+func (h *TransJatimHandler) triggerGeometryGeneration(ruteID int32, ruteSlug string) {
+	if h.OrsApiKey == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		stops, err := h.Queries.GetRuteStopsWithCoords(ctx, ruteID)
+		if err != nil {
+			slog.Error("tj.ors.get_stops_failed", slog.String("slug", ruteSlug), slog.String("err", err.Error()))
+			return
+		}
+		coords, err := fetchRouteGeometry(ctx, stops, h.OrsApiKey)
+		if err != nil {
+			slog.Warn("tj.ors.geometry_failed", slog.String("slug", ruteSlug), slog.String("err", err.Error()))
+			return
+		}
+		if err := h.Queries.UpdateRuteGeometry(ctx, ruteID, coords); err != nil {
+			slog.Error("tj.ors.save_geometry_failed", slog.String("slug", ruteSlug), slog.String("err", err.Error()))
+			return
+		}
+		slog.Info("tj.ors.geometry_saved", slog.String("slug", ruteSlug), slog.Int("points", len(coords)/10))
+	}()
+}
+
+// AdminGenerateRuteGeometry allows manual re-generation of route geometry via ORS.
+func (h *TransJatimHandler) AdminGenerateRuteGeometry(c fiber.Ctx) error {
+	if h.OrsApiKey == "" {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+			Code:    "ERR_ORS_NOT_CONFIGURED",
+			Message: "ORS_API_KEY tidak dikonfigurasi di server",
+		})
+	}
+
+	slug := c.Params("slug")
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	rute, err := h.Queries.GetRuteBySlug(ctx, slug)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Code: "ERR_NOT_FOUND", Message: "Rute tidak ditemukan",
+		})
+	}
+
+	stops, err := h.Queries.GetRuteStopsWithCoords(ctx, rute.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code: "ERR_DB", Message: "Gagal mengambil data stop rute",
+		})
+	}
+
+	orsCtx, orsCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer orsCancel()
+
+	coords, err := fetchRouteGeometry(orsCtx, stops, h.OrsApiKey)
+	if err != nil {
+		slog.Error("admin.generate_geometry.ors_failed", slog.String("slug", slug), slog.String("err", err.Error()))
+		return c.Status(fiber.StatusBadGateway).JSON(ErrorResponse{
+			Code:    "ERR_ORS",
+			Message: "Gagal mengambil geometri rute dari OpenRouteService: " + err.Error(),
+		})
+	}
+
+	if err := h.Queries.UpdateRuteGeometry(ctx, rute.ID, coords); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Code: "ERR_DB", Message: "Gagal menyimpan geometri rute",
+		})
+	}
+
+	invalidateRuteCache()
+	return c.JSON(SuccessResponse{Pesan: "Geometri rute berhasil di-generate"})
 }
