@@ -18,8 +18,9 @@ type MasterNjkbRequest struct {
 }
 
 type KalkulasiNJKBResponse struct {
-	Njkb     int64           `json:"njkb"`
-	Estimasi []EstimasiTarif `json:"estimasi"`
+	Njkb         int64           `json:"njkb"`
+	Estimasi     []EstimasiTarif `json:"estimasi"`
+	BeaBalikNama BeaBalikNama    `json:"bea_balik_nama"`
 }
 
 type EstimasiTarif struct {
@@ -27,6 +28,12 @@ type EstimasiTarif struct {
 	Label     string `json:"label"`
 	Pkb       int64  `json:"pkb"`
 	Opsen     int64  `json:"opsen"`
+}
+
+type BeaBalikNama struct {
+	Bbn1            int64 `json:"bbn1"`
+	OpsenBbn1       int64 `json:"opsen_bbn1"`
+	Bbn2            int64 `json:"bbn2"`
 }
 
 type MasterNjkbSummaryResponse struct {
