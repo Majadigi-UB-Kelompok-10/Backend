@@ -78,6 +78,8 @@ func (h *JdihHandler) AdminListDokumen(c fiber.Ctx) error {
 		resData = append(resData, DokumenItemResponse{
 			ID:         r.ID,
 			Jenis:      string(r.Jenis),
+			Nomor:      r.Nomor,
+			Tahun:      r.Tahun,
 			Judul:      r.Judul,
 			Tanggal:    r.TanggalPenetapan.Time.Format("02 Jan 2006"),
 			Status:     string(r.Status),
