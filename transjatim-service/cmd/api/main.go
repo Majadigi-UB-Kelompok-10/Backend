@@ -350,7 +350,11 @@ func main() {
 
 	notify.Init()
 	queries := db.New(pool)
-	tjHandler := handlers.NewTransJatimHandler(queries)
+	orsApiKey := os.Getenv("ORS_API_KEY")
+	if orsApiKey == "" {
+		slog.Warn("ORS_API_KEY tidak di-set — auto-generate geometri rute dinonaktifkan")
+	}
+	tjHandler := handlers.NewTransJatimHandler(queries, orsApiKey)
 
 	routes.SetupRoutes(app, tjHandler)
 	slog.Info("routes terkonfigurasi")
