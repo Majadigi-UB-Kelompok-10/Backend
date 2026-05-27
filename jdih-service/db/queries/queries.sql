@@ -80,6 +80,12 @@ FROM dokumen_hukum
 WHERE jenis = sqlc.arg('jenis')
 ORDER BY tahun DESC;
 
+-- name: GetDistinctTahunAll :many
+-- Dipakai: filter tahun di halaman Pencarian (lintas semua jenis)
+SELECT DISTINCT tahun
+FROM dokumen_hukum
+ORDER BY tahun DESC;
+
 -- =====================================================================
 -- PENGUMUMAN — PUBLIC
 -- =====================================================================
