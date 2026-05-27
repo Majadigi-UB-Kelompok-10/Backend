@@ -45,6 +45,12 @@ func SetupRoutes(app *fiber.App, h *handlers.SinakerHandler) {
 	public.Get("/blk", searchLimiter, h.GetListBLK)
 	public.Get("/blk/:id/kejuruan", searchLimiter, h.GetKejuruanByBLK)
 
+	// Wilayah Indonesia (Proxy emsifa, cached 30 hari)
+	public.Get("/wilayah/provinsi", h.GetWilayahProvinsi)
+	public.Get("/wilayah/kab-kota/:prov_id", h.GetWilayahKabKota)
+	public.Get("/wilayah/kecamatan/:kab_id", h.GetWilayahKecamatan)
+	public.Get("/wilayah/kelurahan/:kec_id", h.GetWilayahKelurahan)
+
 	// Pendaftaran & Cek Status
 	public.Post("/pendaftaran", actionLimiter, h.SubmitPendaftaran) 
 	public.Post("/cek-status", searchLimiter, h.CekStatus)          
