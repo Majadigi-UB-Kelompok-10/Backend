@@ -70,6 +70,7 @@ func (h *BapendaHandler) GetInfoPajak(c fiber.Ctx) error {
 				PlatNomor:   data.PlatNomorDisplay,
 				Merk:        data.Merk,
 				Tipe:        data.Tipe,
+				Model:       data.Model,
 				Warna:       data.Warna,
 				TahunBuat:   data.TahunBuat,
 				MasaPajak:   data.MasaPajak.Time.Format("2006-01-02"),
@@ -296,12 +297,14 @@ func (h *BapendaHandler) HitungKalkulasiNJKB(c fiber.Ctx) error {
 	}
 
 	estimasi := calculateEstimasi(njkbData.NilaiJual, tarifList)
+	bbn := calculateBBN(njkbData.NilaiJual, tarifList)
 
 	res := SuccessResponse{
 		Pesan: "Sukses",
 		Data: KalkulasiNJKBResponse{
-			Njkb:     njkbData.NilaiJual,
-			Estimasi: estimasi,
+			Njkb:         njkbData.NilaiJual,
+			Estimasi:     estimasi,
+			BeaBalikNama: bbn,
 		},
 	}
 	return cacheJSON(c, cacheKey, CacheTTLDetail, res)
@@ -332,6 +335,30 @@ func calculateEstimasi(nilaiJual int64, tarifList []db.GetAllTarifPKBRow) []Esti
 		})
 	}
 	return estimasi
+}
+
+func calculateBBN(nilaiJual int64, tarifList []db.GetAllTarifPKBRow) BeaBalikNama {
+	if len(tarifList) == 0 {
+		return BeaBalikNama{}
+	}
+	t := tarifList[0]
+	nilaiFloat := float64(nilaiJual)
+
+	bbn1Persen, err1 := t.Bbn1Persen.Float64Value()
+	opsenBbn1Persen, err2 := t.OpsenBbn1Persen.Float64Value()
+	bbn2Persen, err3 := t.Bbn2Persen.Float64Value()
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		slog.Warn("bapenda.bbn.tarif_invalid")
+		return BeaBalikNama{}
+	}
+
+	bbn1 := nilaiFloat * bbn1Persen.Float64
+	return BeaBalikNama{
+		Bbn1:      int64(math.Round(bbn1)),
+		OpsenBbn1: int64(math.Round(bbn1 * opsenBbn1Persen.Float64)),
+		Bbn2:      int64(math.Round(nilaiFloat * bbn2Persen.Float64)),
+	}
 }
 
 var _ = cache.GlobalCache
