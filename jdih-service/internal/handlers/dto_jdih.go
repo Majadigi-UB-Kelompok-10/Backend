@@ -8,14 +8,17 @@ type PengumumanResponse struct {
 }
 
 type DokumenItemResponse struct {
-	ID             int32  `json:"id"`
-	Jenis          string `json:"jenis"`  
-	Judul          string `json:"judul"`  
-	Ringkasan      string `json:"ringkasan,omitempty"`
-	Tanggal        string `json:"tanggal"` 
-	Status         string `json:"status"`  
-	JumlahView     int32  `json:"jumlah_view,omitempty"`
-	PdfUrl         string `json:"pdf_url,omitempty"`
+	ID         int32  `json:"id"`
+	Jenis      string `json:"jenis"`
+	Nomor      string `json:"nomor"`
+	Tahun      int16  `json:"tahun"`
+	Judul      string `json:"judul"`
+	Ringkasan  string `json:"ringkasan,omitempty"`
+	Tanggal    string `json:"tanggal"`
+	Status     string `json:"status"`
+	JumlahView int32  `json:"jumlah_view,omitempty"`
+	PdfUrl     string `json:"pdf_url,omitempty"`
+	PdfSizeKb  int32  `json:"pdf_size_kb,omitempty"`
 }
 
 type SubjekResponse struct {
