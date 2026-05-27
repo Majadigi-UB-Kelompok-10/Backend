@@ -217,6 +217,33 @@ func (q *Queries) GetDistinctTahunByJenis(ctx context.Context, jenis JenisDokume
 	return items, nil
 }
 
+const getDistinctTahunAll = `-- name: GetDistinctTahunAll :many
+SELECT DISTINCT tahun
+FROM dokumen_hukum
+ORDER BY tahun DESC
+`
+
+// Dipakai: filter tahun di halaman Pencarian (lintas semua jenis)
+func (q *Queries) GetDistinctTahunAll(ctx context.Context) ([]int16, error) {
+	rows, err := q.db.Query(ctx, getDistinctTahunAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int16
+	for rows.Next() {
+		var tahun int16
+		if err := rows.Scan(&tahun); err != nil {
+			return nil, err
+		}
+		items = append(items, tahun)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDokumenByID = `-- name: GetDokumenByID :one
 SELECT id, jenis, nomor, tahun, judul, ringkasan, tanggal_penetapan, status,
        pdf_url, pdf_size_kb, urusan_pemerintahan, jumlah_view
