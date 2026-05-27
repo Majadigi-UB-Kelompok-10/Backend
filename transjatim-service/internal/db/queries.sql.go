@@ -627,7 +627,7 @@ func (q *Queries) GetRuteBySlug(ctx context.Context, slug string) (GetRuteBySlug
 
 const getRuteStops = `-- name: GetRuteStops :many
 
-SELECT rs.urutan, t.id AS terminal_id, t.nama, t.kota
+SELECT rs.urutan, t.id AS terminal_id, t.nama, t.kota, t.lat, t.lng
 FROM rute_stop rs
 JOIN terminal t ON t.id = rs.terminal_id
 WHERE rs.rute_id = $1
@@ -635,10 +635,12 @@ ORDER BY rs.urutan
 `
 
 type GetRuteStopsRow struct {
-	Urutan     int32  `json:"urutan"`
-	TerminalID int32  `json:"terminal_id"`
-	Nama       string `json:"nama"`
-	Kota       string `json:"kota"`
+	Urutan     int32         `json:"urutan"`
+	TerminalID int32         `json:"terminal_id"`
+	Nama       string        `json:"nama"`
+	Kota       string        `json:"kota"`
+	Lat        pgtype.Float8 `json:"lat"`
+	Lng        pgtype.Float8 `json:"lng"`
 }
 
 // =====================================================================
@@ -658,6 +660,8 @@ func (q *Queries) GetRuteStops(ctx context.Context, ruteID int32) ([]GetRuteStop
 			&i.TerminalID,
 			&i.Nama,
 			&i.Kota,
+			&i.Lat,
+			&i.Lng,
 		); err != nil {
 			return nil, err
 		}
@@ -1368,5 +1372,61 @@ func (q *Queries) UpdateTerminal(ctx context.Context, arg UpdateTerminalParams) 
 		arg.Aktif,
 		arg.SlugLama,
 	)
+	return err
+}
+
+// =====================================================================
+// RUTE GEOMETRY
+// =====================================================================
+
+const getRuteStopsWithCoords = `-- name: GetRuteStopsWithCoords :many
+SELECT rs.urutan, t.id AS terminal_id, t.lat, t.lng
+FROM rute_stop rs
+JOIN terminal t ON t.id = rs.terminal_id
+WHERE rs.rute_id = $1
+ORDER BY rs.urutan
+`
+
+type GetRuteStopsWithCoordsRow struct {
+	Urutan     int32         `json:"urutan"`
+	TerminalID int32         `json:"terminal_id"`
+	Lat        pgtype.Float8 `json:"lat"`
+	Lng        pgtype.Float8 `json:"lng"`
+}
+
+func (q *Queries) GetRuteStopsWithCoords(ctx context.Context, ruteID int32) ([]GetRuteStopsWithCoordsRow, error) {
+	rows, err := q.db.Query(ctx, getRuteStopsWithCoords, ruteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRuteStopsWithCoordsRow
+	for rows.Next() {
+		var i GetRuteStopsWithCoordsRow
+		if err := rows.Scan(&i.Urutan, &i.TerminalID, &i.Lat, &i.Lng); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+const getRuteGeometry = `-- name: GetRuteGeometry :one
+SELECT koordinat_rute FROM rute WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetRuteGeometry(ctx context.Context, ruteID int32) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getRuteGeometry, ruteID)
+	var coords []byte
+	err := row.Scan(&coords)
+	return coords, err
+}
+
+const updateRuteGeometry = `-- name: UpdateRuteGeometry :exec
+UPDATE rute SET koordinat_rute = $2 WHERE id = $1
+`
+
+func (q *Queries) UpdateRuteGeometry(ctx context.Context, ruteID int32, coords []byte) error {
+	_, err := q.db.Exec(ctx, updateRuteGeometry, ruteID, coords)
 	return err
 }
