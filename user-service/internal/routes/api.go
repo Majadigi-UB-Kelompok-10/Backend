@@ -35,6 +35,28 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, notif *handlers.Notifi
 		},
 	})
 
+	resendLimiter := limiter.New(limiter.Config{
+		Max:        3,
+		Expiration: 15 * time.Minute,
+		LimitReached: func(c fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+				Code:    "ERR_RATE_LIMIT",
+				Message: "Terlalu banyak permintaan, silakan tunggu 15 menit",
+			})
+		},
+	})
+
+	forgotLimiter := limiter.New(limiter.Config{
+		Max:        3,
+		Expiration: 15 * time.Minute,
+		LimitReached: func(c fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(handlers.ErrorResponse{
+				Code:    "ERR_RATE_LIMIT",
+				Message: "Terlalu banyak permintaan reset password, silakan tunggu 15 menit",
+			})
+		},
+	})
+
 	api.Get("/", func(c fiber.Ctx) error {
 		return c.SendString("User Service API v1 Active")
 	})
@@ -48,6 +70,9 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, notif *handlers.Notifi
 	auth.Post("/refresh", h.RefreshToken)
 	auth.Post("/logout", h.Logout)
 	auth.Get("/verify-email", h.VerifyEmail)
+	auth.Post("/resend-verification", resendLimiter, h.ResendVerification)
+	auth.Post("/forgot-password", forgotLimiter, h.ForgotPassword)
+	auth.Post("/reset-password", forgotLimiter, h.ResetPassword)
 
 	// Protected auth routes (require valid access token)
 	me := auth.Group("/", requireAuth(jwtSecret))
