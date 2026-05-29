@@ -72,6 +72,7 @@ func SetupRoutes(app *fiber.App, h *handlers.AuthHandler, notif *handlers.Notifi
 	auth.Get("/verify-email", h.VerifyEmail)
 	auth.Post("/resend-verification", resendLimiter, h.ResendVerification)
 	auth.Post("/forgot-password", forgotLimiter, h.ForgotPassword)
+	auth.Get("/reset-password-redirect", h.ResetPasswordRedirect)
 	auth.Post("/reset-password", forgotLimiter, h.ResetPassword)
 
 	// Protected auth routes (require valid access token)
