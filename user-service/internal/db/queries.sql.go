@@ -701,3 +701,85 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 	)
 	return i, err
 }
+
+// =============================================================================
+// Password Reset
+// =============================================================================
+
+const getUserByEmailBasic = `-- name: GetUserByEmailBasic :one
+SELECT id, first_name, email, is_active, email_verified
+FROM users WHERE email = $1 LIMIT 1
+`
+
+type GetUserByEmailBasicRow struct {
+	ID            pgtype.UUID `json:"id"`
+	FirstName     string      `json:"first_name"`
+	Email         string      `json:"email"`
+	IsActive      bool        `json:"is_active"`
+	EmailVerified bool        `json:"email_verified"`
+}
+
+func (q *Queries) GetUserByEmailBasic(ctx context.Context, email string) (GetUserByEmailBasicRow, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailBasic, email)
+	var i GetUserByEmailBasicRow
+	err := row.Scan(&i.ID, &i.FirstName, &i.Email, &i.IsActive, &i.EmailVerified)
+	return i, err
+}
+
+const setPasswordResetToken = `-- name: SetPasswordResetToken :exec
+UPDATE users
+SET password_reset_token      = $1,
+    password_reset_expires_at = $2
+WHERE id = $3
+`
+
+type SetPasswordResetTokenParams struct {
+	PasswordResetToken     pgtype.Text        `json:"password_reset_token"`
+	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`
+	ID                     pgtype.UUID        `json:"id"`
+}
+
+func (q *Queries) SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error {
+	_, err := q.db.Exec(ctx, setPasswordResetToken, arg.PasswordResetToken, arg.PasswordResetExpiresAt, arg.ID)
+	return err
+}
+
+const getUserByPasswordResetToken = `-- name: GetUserByPasswordResetToken :one
+SELECT id, first_name, email
+FROM users
+WHERE password_reset_token = $1
+  AND password_reset_expires_at > NOW()
+  AND is_active = true
+LIMIT 1
+`
+
+type GetUserByPasswordResetTokenRow struct {
+	ID        pgtype.UUID `json:"id"`
+	FirstName string      `json:"first_name"`
+	Email     string      `json:"email"`
+}
+
+func (q *Queries) GetUserByPasswordResetToken(ctx context.Context, token pgtype.Text) (GetUserByPasswordResetTokenRow, error) {
+	row := q.db.QueryRow(ctx, getUserByPasswordResetToken, token)
+	var i GetUserByPasswordResetTokenRow
+	err := row.Scan(&i.ID, &i.FirstName, &i.Email)
+	return i, err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash             = $1,
+    password_reset_token      = NULL,
+    password_reset_expires_at = NULL
+WHERE id = $2
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string      `json:"password_hash"`
+	ID           pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
