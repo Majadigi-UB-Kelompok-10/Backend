@@ -101,6 +101,17 @@ SISKAPERBAPO menyajikan informasi update harga di tingkat konsumen dan produsen,
 
 Inovasi dari Trans Jatim AJAIB tidak hanya meningkatkan kenyamanan, tetapi juga memberi perlindungan ekstra bagi pengguna, khususnya penyandang disabilitas.Tersedia gratis di Play Store dan App Store, Trans Jatim AJAIB 2.0 menjadi solusi transportasi publik yang aman, efisien, dan inklusif bagi seluruh warga Jawa Timur.', 
     'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp'
+),
+(
+    '41f17995-cad1-4fc3-9fce-e883180b4642', 
+    'NODA', 
+    'Nomor Darurat Jawa Timur', 
+    'Nomor darurat merupakan layanan cepat tanggap dari pemerintah atau instansi terkait untuk memberikan bantuan kepada masyarakat. Nomor ini dapat dihubungi saat warga menghadapi situasi mendesak, berbahaya, atau yang mengancam nyawa—seperti kecelakaan, kebakaran, bencana alam, gangguan keamanan, hingga kondisi medis gawat darurat.
+
+Sejak 2015, pemerintah Indonesia menerapkan Program Layanan Call Center 112 di berbagai daerah di Indonesia. Nomor darurat sengaja dibuat singkat agar mudah diingat dan bisa diakses dengan cepat. Selain Call Center 112, masing-masing wilayah di Indonesia juga memiliki nomor darurat khusus yang bisa mempercepat penanganan. Di Jawa Timur misalnya, tiap instansi menyediakan nomor darurat khusus yang bisa diakses 24 jam dan bebas pulsa.
+
+Agar berjalan efektif, warga dihimbau tidak melakukan panggilan iseng. Informasi yang jelas dan tepat saat melapor akan membantu petugas memberikan respon cepat dan tepat sasaran.', 
+    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp'
 )
 ON CONFLICT ("service_list_id") DO UPDATE SET
     "title" = EXCLUDED."title",
@@ -149,6 +160,10 @@ VALUES
 (
     'd9f92735-903e-4f5d-97c0-627755ded150', 
     'b1000001-0000-4000-8000-000000000002'
+),
+(
+    '41f17995-cad1-4fc3-9fce-e883180b4642', 
+    'b1000001-0000-4000-8000-000000000001'
 );
 
 
@@ -212,13 +227,13 @@ VALUES
 ),
 (
     '112d8f49-75b5-4b55-b463-327b1d540b1b', 
-    '/tiket-transjatim', 
-    '/tiket-transjatim'
+    '/transjatim', 
+    '/transjatim'
 ),
 (
-    'bcb590e8-2817-4864-8ecd-5293c73c8de0', 
-    '/rute-transjatim', 
-    '/rute-transjatim'
+    '4f00c5f2-0afa-4edd-8f2a-fe2cc8ec50e9', 
+    '/nodajatim', 
+    '/nodajatim'
 )
 ON CONFLICT ("endpoint_list_id") DO UPDATE SET
     "slug_name" = EXCLUDED."slug_name",
@@ -239,13 +254,13 @@ VALUES
     '94b02f22-9c4d-461a-883b-046b78975d5c', 
     '776d2206-2b78-4857-9494-523b6de049cf', 
     'Info Pajak Kendaraan Bermotor', 
-    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp'
+    ''
 ),
 (
     '94b02f22-9c4d-461a-883b-046b78975d5c', 
     'a03b781a-b8a2-4a5b-847e-b777a0ff5d35', 
     'Info Nilai Jual Kendaraan Bermotor', 
-    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/bapenda/logo_bapenda.webp'
+    ''
 ),
 (
     '324f2278-f7b8-4680-bfdc-17015673006a', 
@@ -302,10 +317,10 @@ VALUES
     'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp'
 ),
 (
-    'd9f92735-903e-4f5d-97c0-627755ded150', 
-    'bcb590e8-2817-4864-8ecd-5293c73c8de0', 
-    'Rute TransJatim', 
-    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp'
+    '41f17995-cad1-4fc3-9fce-e883180b4642', 
+    '4f00c5f2-0afa-4edd-8f2a-fe2cc8ec50e9', 
+    'Kontak Darurat Jawa Timur', 
+    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp'
 );
 
 
@@ -357,6 +372,11 @@ VALUES
     'd9f92735-903e-4f5d-97c0-627755ded150', 
     'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp', 
     'Logo TransJatim'
+),
+(
+    '41f17995-cad1-4fc3-9fce-e883180b4642', 
+    'https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp', 
+    'Logo Provinsi Jawa Timur'
 );
 
 
@@ -425,6 +445,13 @@ VALUES
     'Jl. Johar No.17, Alun-alun Contong, Kec. Bubutan, Surabaya, Jawa Timur 60174',
     '{"Senin": "05.00 - 21.00", "Selasa": "05.00 - 21.00", "Rabu": "05.00 - 21.00", "Kamis": "05.00 - 21.00", "Jumat": "05.00 - 21.00", "Sabtu": "05.00 - 21.00", "Minggu": "05:00 - 21:00"}'::jsonb,
     '{"youtube": "https://www.youtube.com/channel/UCguXvUk1_z620b8Hr9O9CRQ", "facebook": "https://www.facebook.com/dishubjawatimur", "instagram": "https://www.instagram.com/officialtransjatim/"}'::jsonb
+),
+(
+    '41f17995-cad1-4fc3-9fce-e883180b4642',
+    '',
+    'Seluruh kota',
+    '{"Senin": "24 Jam", "Selasa": "24 Jam", "Rabu": "24 Jam", "Kamis": "24 Jam", "Jumat": "24 Jam", "Sabtu": "24 Jam", "Minggu": "24 Jam"}'::jsonb,
+    '{}'::jsonb
 )
 ON CONFLICT ("service_list_id") DO UPDATE SET
     "service_url" = EXCLUDED."service_url",
@@ -480,6 +507,11 @@ VALUES
     'd9f92735-903e-4f5d-97c0-627755ded150',
     '"Memberikan kemudahaan kepada Pengguna Transjatim untuk mengakses informasi terupdate terkait layanan Transjatim"'::jsonb,
     '{"Panduan naik Bus Trans Jatim": ["Unduh aplikasi Transjatim Ajaib di Play Store dan App Store.", "Tentukan tujuan perjalanan Anda, lalu cek jadwal, rute, dan halte atau shelter terdekat.", "Beli tiket melalui aplikasi (e-money) atau secara langsung (uang tunai) saat di lokasi. Anda juga bisa membeli tiket Trans Jatim luxury langsung dari aplikasi. Untuk pembelian langsung di tempat, sebaiknya siapkan uang pas.", "Pastikan Anda naik di halte terdekat dan sesuai dengan rute Trans Jatim.", "Silakan duduk di tempat yang tersedia. Prioritaskan tempat duduk untuk lansia, ibu hamil, dan penyandang disabilitas. Pastikan Anda juga memantau titik pemberhentian bus supaya tidak kelewatan."]}'::jsonb
+),
+(
+    '41f17995-cad1-4fc3-9fce-e883180b4642',
+    '"Layanan nomor darurat memberikan akses cepat dan mudah untuk mencari pertolongan saat seseorang mengalami atau mengetahui situasi darurat seperti kebakaran, banjir, kecelakaan lalu lintas, kriminalitas, dan lainnya. Dengan begitu, layanan ini diharapkan mampu mempercepat penanganan keadaan darurat dan meminimalisir dampak buruk yang muncul akibat situasi darurat. Layanan nomor darurat beroperasi 24 jam sehari, dan 7 hari seminggu. Sehingga masyarakat bisa mengaksesnya kapanpun dan dari manapun."'::jsonb,
+    '"Kontak darurat biasanya lebih pendek atau sedikit dengan tujuan agar mudah diingat. Pastikan Anda menyimpan daftar kontak darurat di ponsel Anda atau tempat yang mudah dijangkau. Terakhir, pastikan Anda memberikan informasi secara jelas mengenai kejadian dan lokasinya agar petugas bisa mengeksekusinya lebih cepat."'::jsonb
 )
 ON CONFLICT ("service_list_id") DO UPDATE SET
     "benefit" = EXCLUDED."benefit",

@@ -557,21 +557,13 @@
   - "Transportasi Publik"
 - endpoint:
   - endpoint_list_id: "${TTJ_UUID}"
-    - slug_name: "/tiket-transjatim"
-    - page_url: "/tiket-transjatim"
-  - endpoint_list_id: "${RT_UUID}"
-    - slug_name: "/rute-transjatim"
-    - page_url: "/rute-transjatim"
+    - slug_name: "/transjatim"
+    - page_url: "/transjatim"
 - integration:
   - integration_list_id:
     - service_list_id: "${TRANSJATIM_UUID}"
     - endpoint_list_id: "${TTJ_UUID}"
     - title: "Tiket TransJatim"
-    - icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp"
-  - integration_list_id:
-    - service_list_id: "${TRANSJATIM_UUID}"
-    - endpoint_list_id: "${RT_UUID}"
-    - title: "Rute TransJatim"
     - icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/transjatim/logo_transjatim.webp"
 - operational:
   - operational_list_id:
@@ -605,3 +597,50 @@
       "Silakan duduk di tempat yang tersedia. Prioritaskan tempat duduk untuk lansia, ibu hamil, dan penyandang disabilitas. Pastikan Anda juga memantau titik pemberhentian bus supaya tidak kelewatan."
       ]
       }
+
+10. Nomor Darurat Jawa Timur (Nomor Penting)
+
+- title: "NODA"
+- long_title: "Nomor Darurat Jawa Timur"
+- description: "Nomor darurat merupakan layanan cepat tanggap dari pemerintah atau instansi terkait untuk memberikan bantuan kepada masyarakat. Nomor ini dapat dihubungi saat warga menghadapi situasi mendesak, berbahaya, atau yang mengancam nyawa—seperti kecelakaan, kebakaran, bencana alam, gangguan keamanan, hingga kondisi medis gawat darurat.
+\n\n
+Sejak 2015, pemerintah Indonesia menerapkan Program Layanan Call Center 112 di berbagai daerah di Indonesia. Nomor darurat sengaja dibuat singkat agar mudah diingat dan bisa diakses dengan cepat. Selain Call Center 112, masing-masing wilayah di Indonesia juga memiliki nomor darurat khusus yang bisa mempercepat penanganan. Di Jawa Timur misalnya, tiap instansi menyediakan nomor darurat khusus yang bisa diakses 24 jam dan bebas pulsa.
+\n\n
+Agar berjalan efektif, warga dihimbau tidak melakukan panggilan iseng. Informasi yang jelas dan tepat saat melapor akan membantu petugas memberikan respon cepat dan tepat sasaran."
+- icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp"
+- images:
+  - image_list_id:
+    - image_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp"
+    - semantic_label: "Logo Provinsi Jawa Timur"
+- categories:
+  - "Layanan Darurat"
+- endpoint:
+  - endpoint_list_id: "${NODA_UUID}"
+    - slug_name: "/nodajatim"
+    - page_url: "/nodajatim"
+- integration:
+  - integration_list_id:
+    - service_list_id: "${NOMOR_DARURAT_UUID}"
+    - endpoint_list_id: "${NODA_UUID}"
+    - title: "Kontak Darurat Jawa Timur"
+    - icon_url: "https://nhsdrdhzkogczngslvvh.supabase.co/storage/v1/object/public/image-asset/shared/logo-provinsi-jawa-timur.webp"
+- operational:
+  - operational_list_id:
+    - service_list_id: "${NOMOR_DARURAT_UUID}"
+    - service_url: ""
+    - address: "Seluruh kota"
+    - operational_hour: {
+      Senin: "24 Jam",
+      Selasa: "24 Jam",
+      Rabu: "24 Jam",
+      Kamis: "24 Jam",
+      Jumat: "24 Jam",
+      Sabtu: "24 Jam",
+      Minggu: "24 Jam"
+      }
+    - social_media: {}
+- policies:
+  - policy_list_id:
+    - service_list_id: "${NOMOR_DARURAT_UUID}"
+    - benefit: "Layanan nomor darurat memberikan akses cepat dan mudah untuk mencari pertolongan saat seseorang mengalami atau mengetahui situasi darurat seperti kebakaran, banjir, kecelakaan lalu lintas, kriminalitas, dan lainnya. Dengan begitu, layanan ini diharapkan mampu mempercepat penanganan keadaan darurat dan meminimalisir dampak buruk yang muncul akibat situasi darurat. Layanan nomor darurat beroperasi 24 jam sehari, dan 7 hari seminggu. Sehingga masyarakat bisa mengaksesnya kapanpun dan dari manapun."
+    - instruction: "Kontak darurat biasanya lebih pendek atau sedikit dengan tujuan agar mudah diingat. Pastikan Anda menyimpan daftar kontak darurat di ponsel Anda atau tempat yang mudah dijangkau. Terakhir, pastikan Anda memberikan informasi secara jelas mengenai kejadian dan lokasinya agar petugas bisa mengeksekusinya lebih cepat."

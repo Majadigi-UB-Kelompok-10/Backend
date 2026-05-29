@@ -14,6 +14,7 @@ export SIDITA_UUID="48b34e1e-2f4c-48c3-9ae0-96cdc5326311"
 export SINAKER_UUID="a9e7bcc7-7b6d-47e7-9d04-daa0f030110c"
 export SISKAPERBAPO_UUID="656ed163-4303-4c94-895b-cfa0d634c703"
 export TRANSJATIM_UUID="d9f92735-903e-4f5d-97c0-627755ded150"
+export NOMOR_DARURAT_UUID="41f17995-cad1-4fc3-9fce-e883180b4642"
 
 # -- Endpoints --
 # -- Bansos --
@@ -45,7 +46,9 @@ export HBP_UUID="9d4a9d2b-55b4-411d-b1c2-8debef3841b9"
 
 # -- TransJatim --
 export TTJ_UUID="112d8f49-75b5-4b55-b463-327b1d540b1b"
-export RT_UUID="bcb590e8-2817-4864-8ecd-5293c73c8de0"
+
+# -- Nomor Darurat --
+export NODA_UUID="4f00c5f2-0afa-4edd-8f2a-fe2cc8ec50e9"
 
 # 2. Substitute and output to the migration folder
 envsubst < "$SCRIPT_DIR/template.sql" > "$SCRIPT_DIR/../migrations/004-seed.sql"
