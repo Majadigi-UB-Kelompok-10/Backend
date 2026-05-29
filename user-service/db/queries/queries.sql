@@ -167,3 +167,32 @@ WHERE user_id = sqlc.arg('user_id') AND service_id = sqlc.arg('service_id');
 
 -- name: GetUserFavoriteCount :one
 SELECT COUNT(*) FROM user_service_favorites WHERE user_id = sqlc.arg('user_id');
+
+-- =============================================================================
+-- Password Reset
+-- =============================================================================
+
+-- name: GetUserByEmailBasic :one
+SELECT id, first_name, email, is_active, email_verified
+FROM users WHERE email = sqlc.arg('email') LIMIT 1;
+
+-- name: SetPasswordResetToken :exec
+UPDATE users
+SET password_reset_token      = sqlc.arg('password_reset_token'),
+    password_reset_expires_at = sqlc.arg('password_reset_expires_at')
+WHERE id = sqlc.arg('id');
+
+-- name: GetUserByPasswordResetToken :one
+SELECT id, first_name, email
+FROM users
+WHERE password_reset_token = sqlc.arg('token')
+  AND password_reset_expires_at > NOW()
+  AND is_active = true
+LIMIT 1;
+
+-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash             = sqlc.arg('password_hash'),
+    password_reset_token      = NULL,
+    password_reset_expires_at = NULL
+WHERE id = sqlc.arg('id');
