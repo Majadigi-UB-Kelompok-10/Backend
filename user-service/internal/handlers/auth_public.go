@@ -473,6 +473,180 @@ func (h *AuthHandler) VerifyEmail(c fiber.Ctx) error {
 }
 
 // -----------------------------------------------------------------------------
+// POST /api/v1/auth/resend-verification
+// -----------------------------------------------------------------------------
+
+func (h *AuthHandler) ResendVerification(c fiber.Ctx) error {
+	var req ResendVerificationRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_BIND", Message: "Request tidak valid"})
+	}
+
+	email, ve := utils.ValidateEmail(req.Email)
+	if ve != nil {
+		return validationError(c, ve)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	user, err := h.Queries.GetUserByEmailBasic(ctx, email)
+	if err != nil {
+		return c.Status(404).JSON(ErrorResponse{Code: "ERR_EMAIL_NOT_FOUND", Message: "Email tidak terdaftar"})
+	}
+
+	if !user.IsActive {
+		return c.Status(403).JSON(ErrorResponse{Code: "ERR_ACCOUNT_INACTIVE", Message: "Akun tidak aktif, hubungi admin"})
+	}
+
+	if user.EmailVerified {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_ALREADY_VERIFIED", Message: "Email sudah diverifikasi, silakan login"})
+	}
+
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		slog.Error("auth.resend_verification.token_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal membuat token"})
+	}
+	token := hex.EncodeToString(tokenBytes)
+	expiry := pgtype.Timestamptz{Time: time.Now().UTC().Add(24 * time.Hour), Valid: true}
+
+	if err := h.Queries.SetEmailVerificationToken(ctx, db.SetEmailVerificationTokenParams{
+		ID:                   user.ID,
+		EmailVerifyToken:     pgtype.Text{String: token, Valid: true},
+		EmailVerifyExpiresAt: expiry,
+	}); err != nil {
+		slog.Error("auth.resend_verification.db_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menyimpan token"})
+	}
+
+	baseURL := os.Getenv("APP_BASE_URL")
+	if baseURL == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "3000"
+		}
+		baseURL = "http://localhost:" + port
+	}
+	verifyURL := baseURL + "/api/v1/auth/verify-email?token=" + token
+	emailpkg.SendVerificationEmailAsync(user.Email, user.FirstName, verifyURL)
+
+	return c.JSON(SuccessResponse{Pesan: "Link verifikasi telah dikirim ulang ke email Anda."})
+}
+
+// -----------------------------------------------------------------------------
+// POST /api/v1/auth/forgot-password
+// -----------------------------------------------------------------------------
+
+func (h *AuthHandler) ForgotPassword(c fiber.Ctx) error {
+	var req ForgotPasswordRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_BIND", Message: "Request tidak valid"})
+	}
+
+	email, ve := utils.ValidateEmail(req.Email)
+	if ve != nil {
+		return validationError(c, ve)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	user, err := h.Queries.GetUserByEmailBasic(ctx, email)
+	if err != nil {
+		return c.Status(404).JSON(ErrorResponse{Code: "ERR_EMAIL_NOT_FOUND", Message: "Email tidak terdaftar"})
+	}
+
+	if !user.IsActive {
+		return c.Status(403).JSON(ErrorResponse{Code: "ERR_ACCOUNT_INACTIVE", Message: "Akun tidak aktif, hubungi admin"})
+	}
+
+	if !user.EmailVerified {
+		return c.Status(403).JSON(ErrorResponse{Code: "ERR_EMAIL_NOT_VERIFIED", Message: "Email belum diverifikasi. Silakan verifikasi email Anda terlebih dahulu."})
+	}
+
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		slog.Error("auth.forgot_password.token_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal membuat token"})
+	}
+	token := hex.EncodeToString(tokenBytes)
+	expiry := pgtype.Timestamptz{Time: time.Now().UTC().Add(15 * time.Minute), Valid: true}
+
+	if err := h.Queries.SetPasswordResetToken(ctx, db.SetPasswordResetTokenParams{
+		PasswordResetToken:     pgtype.Text{String: token, Valid: true},
+		PasswordResetExpiresAt: expiry,
+		ID:                     user.ID,
+	}); err != nil {
+		slog.Error("auth.forgot_password.db_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal menyimpan token reset"})
+	}
+
+	baseURL := os.Getenv("APP_BASE_URL")
+	if baseURL == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "3000"
+		}
+		baseURL = "http://localhost:" + port
+	}
+	resetURL := baseURL + "/reset-password?token=" + token
+	emailpkg.SendPasswordResetEmailAsync(user.Email, user.FirstName, resetURL)
+
+	return c.JSON(SuccessResponse{Pesan: "Link reset password telah dikirim ke email Anda. Link berlaku selama 15 menit."})
+}
+
+// -----------------------------------------------------------------------------
+// POST /api/v1/auth/reset-password
+// -----------------------------------------------------------------------------
+
+func (h *AuthHandler) ResetPassword(c fiber.Ctx) error {
+	var req ResetPasswordRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_BIND", Message: "Request tidak valid"})
+	}
+
+	if req.Token == "" {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION_FAILED", Message: "Token wajib diisi"})
+	}
+
+	if ve := utils.ValidatePassword(req.NewPassword); ve != nil {
+		return validationError(c, ve)
+	}
+
+	if req.NewPassword != req.ConfirmNewPassword {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION_FAILED", Message: "Konfirmasi password tidak cocok"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextQueryTimeout)
+	defer cancel()
+
+	user, err := h.Queries.GetUserByPasswordResetToken(ctx, pgtype.Text{String: req.Token, Valid: true})
+	if err != nil {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_INVALID_TOKEN", Message: "Token tidak valid atau sudah kadaluarsa"})
+	}
+
+	hash, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		slog.Error("auth.reset_password.hash_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal memproses password"})
+	}
+
+	if err := h.Queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		PasswordHash: hash,
+		ID:           user.ID,
+	}); err != nil {
+		slog.Error("auth.reset_password.db_error", slog.String("err", err.Error()))
+		return c.Status(500).JSON(ErrorResponse{Code: "ERR_INTERNAL", Message: "Gagal memperbarui password"})
+	}
+
+	_ = h.Queries.RevokeAllUserTokens(ctx, user.ID)
+	invalidateUserCache(uuidToString(user.ID))
+
+	return c.JSON(SuccessResponse{Pesan: "Password berhasil diubah. Silakan login dengan password baru."})
+}
+
+// -----------------------------------------------------------------------------
 // GET /api/v1/auth/favorites  (requires JWT middleware)
 // -----------------------------------------------------------------------------
 
