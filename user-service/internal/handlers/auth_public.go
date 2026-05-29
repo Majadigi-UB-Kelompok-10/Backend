@@ -590,10 +590,39 @@ func (h *AuthHandler) ForgotPassword(c fiber.Ctx) error {
 		}
 		baseURL = "http://localhost:" + port
 	}
-	resetURL := baseURL + "/reset-password?token=" + token
+	resetURL := baseURL + "/api/v1/auth/reset-password-redirect?token=" + token
 	emailpkg.SendPasswordResetEmailAsync(user.Email, user.FirstName, resetURL)
 
 	return c.JSON(SuccessResponse{Pesan: "Link reset password telah dikirim ke email Anda. Link berlaku selama 15 menit."})
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/v1/auth/reset-password-redirect?token=xxx  (public)
+// -----------------------------------------------------------------------------
+
+func (h *AuthHandler) ResetPasswordRedirect(c fiber.Ctx) error {
+	token := c.Query("token")
+	if token == "" {
+		return c.Status(400).JSON(ErrorResponse{Code: "ERR_VALIDATION_FAILED", Message: "Token tidak ditemukan"})
+	}
+
+	deepLinkBase := os.Getenv("MOBILE_DEEP_LINK_BASE")
+	if deepLinkBase == "" {
+		return c.Status(200).Type("html").SendString(`<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>Reset Password</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px">
+<h2>Reset Password</h2>
+<p>Silakan buka aplikasi <b>Majadigi</b> untuk melanjutkan reset password.</p>
+<p style="color:#6b7280;font-size:14px">Jika Anda belum memiliki aplikasi, unduh terlebih dahulu.</p>
+</body></html>`)
+	}
+
+	// Strip trailing slash from base to avoid double slash
+	base := strings.TrimRight(deepLinkBase, "/")
+	redirectURL := base + "/reset-password?token=" + token
+	return c.Redirect().To(redirectURL)
 }
 
 // -----------------------------------------------------------------------------
