@@ -619,8 +619,7 @@ func (h *AuthHandler) ResetPasswordRedirect(c fiber.Ctx) error {
 </body></html>`)
 	}
 
-	// Strip trailing slash from base to avoid double slash
-	base := strings.TrimRight(deepLinkBase, "/")
+	base := strings.TrimSuffix(deepLinkBase, "/")
 	redirectURL := base + "/reset-password?token=" + token
 	return c.Redirect().To(redirectURL)
 }
