@@ -56,6 +56,7 @@ services:
       - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - MOBILE_DEEP_LINK_BASE=${MOBILE_DEEP_LINK_BASE}
     volumes:
       - .:/app
       - go-mod-cache:/root/go/pkg/mod
