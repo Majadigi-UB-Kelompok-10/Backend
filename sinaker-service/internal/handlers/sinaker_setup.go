@@ -15,8 +15,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/sendgrid/sendgrid-go"
-	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"bytes"
+	"encoding/json"
 
 	"github.com/farildzaky/sinaker-service/internal/cache"
 	"github.com/farildzaky/sinaker-service/internal/db"
@@ -105,7 +105,7 @@ func (h *SinakerHandler) uploadImageReal(ctx context.Context, fileHeader *multip
 }
 
 // =====================================================================
-// EMAIL — SendGrid Async
+// EMAIL — Brevo Async
 // =====================================================================
 
 // sendEmailStatusAsync dipakai saat ada perubahan status pendaftaran (Pending -> Diterima/Ditolak)
@@ -117,17 +117,13 @@ func sendEmailStatusAsync(toEmail, namaLengkap, blkNama, kejuruanNama, status st
 			}
 		}()
 
-		apiKey := os.Getenv("SENDGRID_API_KEY")
-		senderEmail := os.Getenv("SENDGRID_SENDER_EMAIL")
+		apiKey := os.Getenv("BREVO_API_KEY")
+		senderEmail := os.Getenv("SENDER_EMAIL")
 
 		if apiKey == "" || senderEmail == "" {
-			slog.Warn("email.config_missing", slog.String("note", "SendGrid env belum diset, kirim email di-skip"))
+			slog.Warn("email.config_missing", slog.String("note", "Brevo env belum diset, kirim email di-skip"))
 			return
 		}
-
-		from := mail.NewEmail("Tim BLK Jawa Timur", senderEmail)
-		subject := "Update Status Pendaftaran BLK Anda"
-		to := mail.NewEmail(namaLengkap, toEmail)
 
 		var color string
 		if status == "diterima" {
@@ -152,18 +148,32 @@ func sendEmailStatusAsync(toEmail, namaLengkap, blkNama, kejuruanNama, status st
             <hr><small>Tim Disnakertrans Jawa Timur (Sinaker)</small>
         `, namaLengkap, blkNama, kejuruanNama, color, strings.ToUpper(status))
 
-		message := mail.NewSingleEmail(from, subject, to, plainText, htmlContent)
-		client := sendgrid.NewSendClient(apiKey)
-
-		response, err := client.Send(message)
-		switch {
-		case err != nil:
-			slog.Error("email.send_failed", slog.String("error", err.Error()), slog.String("to", toEmail))
-		case response.StatusCode >= 400:
-			slog.Error("email.rejected", slog.Int("status_code", response.StatusCode), slog.String("body", response.Body))
-		default:
-			slog.Info("email.sent", slog.String("to", toEmail), slog.String("status", status))
+		payload := map[string]any{
+			"sender":      map[string]string{"name": "Tim BLK Jawa Timur", "email": senderEmail},
+			"to":          []map[string]string{{"name": namaLengkap, "email": toEmail}},
+			"subject":     "Update Status Pendaftaran BLK Anda",
+			"htmlContent": htmlContent,
+			"textContent": plainText,
 		}
+		body, _ := json.Marshal(payload)
+		req, err := http.NewRequest("POST", "https://api.brevo.com/v3/smtp/email", bytes.NewReader(body))
+		if err != nil {
+			slog.Error("email.request_failed", slog.String("error", err.Error()))
+			return
+		}
+		req.Header.Set("api-key", apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			slog.Error("email.send_failed", slog.String("error", err.Error()), slog.String("to", toEmail))
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			slog.Error("email.rejected", slog.Int("status_code", resp.StatusCode), slog.String("to", toEmail))
+			return
+		}
+		slog.Info("email.sent", slog.String("to", toEmail), slog.String("status", status))
 	}()
 }
 
