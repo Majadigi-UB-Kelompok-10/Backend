@@ -15,8 +15,8 @@ import (
 	"github.com/farildzaky/klinik-service/internal/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/sendgrid/sendgrid-go"
-	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"bytes"
+	"encoding/json"
 	"golang.org/x/sync/errgroup" 
 )
 
@@ -105,7 +105,7 @@ func (h *HoaxHandler) uploadImageReal(ctx context.Context, fileHeader *multipart
 }
 
 // =============================================================================
-// EMAIL — SendGrid async with panic recovery
+// EMAIL — Brevo async with panic recovery
 // =============================================================================
 
 func sendEmailAsync(toEmail, name, ticket, status string) {
@@ -119,20 +119,16 @@ func sendEmailAsync(toEmail, name, ticket, status string) {
 			}
 		}()
 
-		apiKey := os.Getenv("SENDGRID_API_KEY")
-		senderEmail := os.Getenv("SENDGRID_SENDER_EMAIL")
+		apiKey := os.Getenv("BREVO_API_KEY")
+		senderEmail := os.Getenv("SENDER_EMAIL")
 
 		if apiKey == "" || senderEmail == "" {
 			slog.Warn("email.config_missing",
 				slog.String("ticket", ticket),
-				slog.String("note", "SendGrid env belum diset, kirim email di-skip"),
+				slog.String("note", "Brevo env belum diset, kirim email di-skip"),
 			)
 			return
 		}
-
-		from := mail.NewEmail("Tim Klinik Hoaks", senderEmail)
-		subject := "Update Laporan Klinik Hoaks Anda - " + ticket
-		to := mail.NewEmail(name, toEmail)
 
 		plainText := fmt.Sprintf("Halo %s, laporan Anda (%s) saat ini berstatus: %s.",
 			name, ticket, status)
@@ -144,27 +140,41 @@ func sendEmailAsync(toEmail, name, ticket, status string) {
             <hr><small>Tim Klinik Hoaks</small>
         `, name, ticket, status)
 
-		message := mail.NewSingleEmail(from, subject, to, plainText, htmlContent)
-		client := sendgrid.NewSendClient(apiKey)
-
-		response, err := client.Send(message)
-		switch {
-		case err != nil:
+		payload := map[string]any{
+			"sender":      map[string]string{"name": "Tim Klinik Hoaks", "email": senderEmail},
+			"to":          []map[string]string{{"name": name, "email": toEmail}},
+			"subject":     "Update Laporan Klinik Hoaks Anda - " + ticket,
+			"htmlContent": htmlContent,
+			"textContent": plainText,
+		}
+		body, _ := json.Marshal(payload)
+		req, err := http.NewRequest("POST", "https://api.brevo.com/v3/smtp/email", bytes.NewReader(body))
+		if err != nil {
+			slog.Error("email.request_failed", slog.String("error", err.Error()))
+			return
+		}
+		req.Header.Set("api-key", apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
 			slog.Error("email.send_failed",
 				slog.String("error", err.Error()),
 				slog.String("to", toEmail),
 			)
-		case response.StatusCode >= 400:
-			slog.Error("email.rejected",
-				slog.Int("status_code", response.StatusCode),
-				slog.String("body", response.Body),
-			)
-		default:
-			slog.Info("email.sent",
-				slog.String("to", toEmail),
-				slog.String("ticket", ticket),
-			)
+			return
 		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			slog.Error("email.rejected",
+				slog.Int("status_code", resp.StatusCode),
+				slog.String("to", toEmail),
+			)
+			return
+		}
+		slog.Info("email.sent",
+			slog.String("to", toEmail),
+			slog.String("ticket", ticket),
+		)
 	}()
 }
 
