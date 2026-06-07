@@ -135,7 +135,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 			}
 			baseURL = "http://localhost:" + port
 		}
-		verifyURL := baseURL + "/api/v1/auth/verify-email?token=" + token
+		verifyURL := baseURL + "/api/v1/user/auth/verify-email?token=" + token
 		emailpkg.SendVerificationEmailAsync(row.Email, row.FirstName, verifyURL)
 	}
 
@@ -528,7 +528,7 @@ func (h *AuthHandler) ResendVerification(c fiber.Ctx) error {
 		}
 		baseURL = "http://localhost:" + port
 	}
-	verifyURL := baseURL + "/api/v1/auth/verify-email?token=" + token
+	verifyURL := baseURL + "/api/v1/user/auth/verify-email?token=" + token
 	emailpkg.SendVerificationEmailAsync(user.Email, user.FirstName, verifyURL)
 
 	return c.JSON(SuccessResponse{Pesan: "Link verifikasi telah dikirim ulang ke email Anda."})
@@ -590,7 +590,7 @@ func (h *AuthHandler) ForgotPassword(c fiber.Ctx) error {
 		}
 		baseURL = "http://localhost:" + port
 	}
-	resetURL := baseURL + "/api/v1/auth/reset-password-redirect?token=" + token
+	resetURL := baseURL + "/api/v1/user/auth/reset-password-redirect?token=" + token
 	emailpkg.SendPasswordResetEmailAsync(user.Email, user.FirstName, resetURL)
 
 	return c.JSON(SuccessResponse{Pesan: "Link reset password telah dikirim ke email Anda. Link berlaku selama 15 menit."})

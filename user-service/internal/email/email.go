@@ -32,7 +32,7 @@ func SendVerificationEmailAsync(toEmail, firstName, verifyURL string) {
 			`<h3>Halo %s,</h3>
 <p>Terima kasih telah mendaftar di <b>Majadigi</b>.</p>
 <p>Klik tombol di bawah untuk memverifikasi akun Anda:</p>
-<p><a href="%s" style="background:#1d4ed8;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">Verifikasi Email</a></p>
+<p><a href="%s" clicktracking="off" style="background:#1d4ed8;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">Verifikasi Email</a></p>
 <p>Link ini berlaku selama 24 jam.</p>
 <hr><small>Tim Majadigi Jawa Timur</small>`,
 			firstName, verifyURL,
