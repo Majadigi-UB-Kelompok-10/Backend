@@ -158,10 +158,13 @@ jobs:
 
     steps:
       - name: Deploy to Railway
-        continue-on-error: true
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE_NAME: ${{ matrix.service }}
         run: |
           npm install -g @railway/cli --silent
-          railway redeploy --service "$SERVICE_NAME" --yes
+          for i in 1 2 3; do
+            railway redeploy --service "$SERVICE_NAME" --environment production --yes && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
