@@ -50,8 +50,8 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CLOUDINARY_URL=${CLOUDINARY_URL}
       - GATEWAY_DATABASE_URL=${GATEWAY_DATABASE_URL}
-      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
-      - SENDGRID_SENDER_EMAIL=${SENDGRID_SENDER_EMAIL}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - SENDER_EMAIL=${SENDER_EMAIL}
     volumes:
       - .:/app
       - go-mod-cache:/root/go/pkg/mod
