@@ -12,7 +12,6 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/sendgrid/sendgrid-go v3.16.1+incompatible
 	golang.org/x/crypto v0.51.0
 	google.golang.org/api v0.280.0
 )
@@ -61,7 +60,6 @@ require (
 	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/sendgrid/rest v2.6.9+incompatible // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/tinylib/msgp v1.6.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
